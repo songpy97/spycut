@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "externalBin": [
+      "binaries/ffmpeg",
+      "binaries/ffprobe"
+    ],
+    "resources": {
+      "../third-party/ffmpeg/NOTICE.md": "licenses/FFmpeg-NOTICE.md",
+      "../third-party/ffmpeg/COPYING.LGPLv2.1": "licenses/COPYING.LGPLv2.1"
+    }
+  }
+}

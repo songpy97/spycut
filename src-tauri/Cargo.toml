@@ -1,0 +1,37 @@
+[package]
+name = "spycut"
+version = "0.1.0"
+description = "Frame-accurate delete interval editor for lecture recordings"
+authors = ["SpyCut"]
+license = "MIT"
+repository = "https://github.com/songpy97/spycut"
+homepage = "https://github.com/songpy97/spycut"
+edition = "2024"
+rust-version = "1.97.1"
+
+[lib]
+name = "spycut_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["process", "rt-multi-thread", "sync", "time", "macros", "io-util", "fs"] }
+blake3 = { version = "1", features = ["pure"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tempfile = "3"
+fs2 = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+[dev-dependencies]
+pretty_assertions = "1"
+tauri = { version = "2", features = ["test"] }
