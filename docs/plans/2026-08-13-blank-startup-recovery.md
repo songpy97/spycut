@@ -57,4 +57,4 @@
 
 ### Release correction discovered during asset verification
 
-The first `v0.1.2` run exposed a hard-coded `0.1.1` filename in `scripts/package-macos.sh`: the application was built from 0.1.2 source, but its DMG, ZIP and checksum attachment names were stale. The packaging script must derive filenames from `src-tauri/tauri.conf.json`; then the invalid prerelease and tag must be replaced and the complete native workflow rerun before delivery.
+The first `v0.1.2` run exposed a hard-coded `0.1.1` filename in `scripts/package-macos.sh`: the application was built from 0.1.2 source, but its DMG, ZIP and checksum attachment names were stale. The packaging script was changed to derive filenames from `src-tauri/tauri.conf.json`; the invalid prerelease and tag were replaced, and GitHub Actions run `31711811297` completed the macOS and Windows native workflow, Windows install/uninstall smoke test and corrected prerelease publication.

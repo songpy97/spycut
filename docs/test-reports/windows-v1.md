@@ -31,7 +31,17 @@
 - macOS/Linux 只保留 `cargo xwin check/clippy` 等编译验证，不再生成可发布 NSIS。
 - Windows 本地通过 `scripts/package-windows.ps1` 构建；GitHub `package` 工作流在 `windows-2022` 原生构建。
 - CI 必须带 `-SmokeTest`，在无既有 SpyCut 安装的干净机器上执行安装器 `/S`，核对 `spycut.exe`、FFmpeg/FFprobe、许可证和卸载器，再静默卸载。
-- 只有安装、内容核对和卸载全部成功后，`setup.exe` 与同目录 `.sha256` 才能上传。正式 Windows 原生产物的大小和 SHA-256 只能在该工作流实际通过后补录，当前不得编造。
+- 只有安装、内容核对和卸载全部成功后，`setup.exe` 与同目录 `.sha256` 才能上传。
+
+## 0.1.2 Windows 原生发布结果
+
+[GitHub Actions 运行 31711811297](https://github.com/songpy97/spycut/actions/runs/31711811297) 已在 `windows-2022` x64 runner 上完成发布构建。`scripts/package-windows.ps1 -SkipChecks -SmokeTest` 成功执行 NSIS 静默安装、必需文件核对和静默卸载，随后发布以下产物：
+
+| 文件 | 大小 | SHA-256 |
+|---|---:|---|
+| `SpyCut_0.1.2_x64-setup.exe` | 75,443,121 bytes | `a1e341aca7833a70977db82564b28aba88fee73ea329bd468ad2db8741f90281` |
+
+该结果证明本次原生安装包可以通过安装器自校验，并具备预期安装内容和卸载路径；它不替代真实 Windows 10/11、WebView2、显卡驱动及用户视频的媒体回归。
 
 ## 必须在真实 Windows 上继续的验收
 
@@ -49,6 +59,6 @@
 
 用户提供的 0.1.1 日志显示应用可完成 `app_started` 与 `frontend_ready`，随后在自动恢复最近项目期间被异常终止，没有 Rust panic、前端异常或 `waveform_started`。将 `%APPDATA%\com.spycut.desktop\projects` 重命名后，应用可稳定进入空白首页，确认最近项目自动恢复是崩溃触发条件；对应时间的 Windows 应用程序日志没有标准 APPCRASH 事件，因此尚不能确认具体原生故障模块。
 
-0.1.2 源码已取消普通启动时的磁盘最近项目恢复：没有显式启动文件时直接显示空白首页，`get_session` 只返回当前进程内会话；手动选择或显式打开视频仍执行完整探测、指纹和 sidecar/兼容缓存恢复。`open_source` 同时补充了 FFprobe 定位、媒体探测、指纹、项目读取、保存、预览发布和会话投影的失败阶段日志。该版本仍须等待 Windows 原生 CI 安装包和真机媒体复测。
+0.1.2 源码已取消普通启动时的磁盘最近项目恢复：没有显式启动文件时直接显示空白首页，`get_session` 只返回当前进程内会话；手动选择或显式打开视频仍执行完整探测、指纹和 sidecar/兼容缓存恢复。`open_source` 同时补充了 FFprobe 定位、媒体探测、指纹、项目读取、保存、预览发布和会话投影的失败阶段日志。该版本的 Windows 原生 CI 安装包与安装/卸载冒烟已通过，真机媒体复测仍待完成。
 
-本报告目前只证明 Windows 代码和链接检查成功；交叉构建安装器已明确失败并撤回。新的 Windows 原生安装包尚未在本工作区生成，不能写成已通过。
+旧交叉构建安装器已明确失败并撤回；0.1.2 已改由 Windows 原生流水线生成并通过安装包冒烟。原闪退是否在真实 Windows 10/11 上完全消失，仍以新版本的真机导入、预览和波形验证为准。

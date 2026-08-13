@@ -1,6 +1,15 @@
 # SpyCut V1 macOS 验收记录
 
-> 2026-08-13 发布检查补充：`scripts/package-macos.sh` 的 DMG、ZIP 和校验文件名改为从 `tauri.conf.json` 读取当前版本，避免升级应用版本后附件仍沿用旧版本号。`v0.1.2` 必须在修正后的原生 macOS 工作流重新生成后才可交付。
+> 2026-08-13 发布检查补充：`scripts/package-macos.sh` 的 DMG、ZIP 和校验文件名已改为从 `tauri.conf.json` 读取当前版本，避免升级应用版本后附件仍沿用旧版本号。[GitHub Actions 运行 31711811297](https://github.com/songpy97/spycut/actions/runs/31711811297) 已用修正后的脚本在 `macos-15` ARM64 runner 上重新生成并发布 0.1.2 产物。
+
+## 0.1.2 原生发布包
+
+| 文件 | 大小 | SHA-256 |
+|---|---:|---|
+| `SpyCut_0.1.2_aarch64.dmg` | 26,153,096 bytes | `55865e71b00c0721bc791c1eb9f1afeaa2104aed4644fe477aa70315ce668194` |
+| `SpyCut_0.1.2_aarch64.zip` | 23,708,006 bytes | `b457d69f49c429fdded997bbd8b8a3bac401e4effdad3a73831cb81e10452341` |
+
+原生打包脚本已完成架构、sidecar、许可、签名、DMG 和 ZIP 完整性检查；本次 CI 结果不表述为一轮新的人工界面回归。
 
 日期：2026-08-13
 
@@ -8,7 +17,7 @@
 
 应用：SpyCut 0.1.0
 
-## 发布包
+## 0.1.0 发布包
 
 | 文件 | 大小 | SHA-256 |
 |---|---:|---|
