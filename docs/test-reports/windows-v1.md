@@ -74,3 +74,5 @@
 ## 0.1.4 波形按钮命中修复
 
 0.1.3 已确认 Windows 可以顺利导入原问题视频，但波形容器的 `pointer-events: none` 使“生成音频波形”按钮事件穿透到时间轴，用户点击只会移动播放头。0.1.4 保留波形轨道空白区域的 Scrub 穿透，只为按钮设置独立命中和更高层级，并用静态 CSS 回归测试锁定该规则。发布后仍需在真实 Windows 上确认按钮可以点击并进入 `request_prepared`、`request_dispatched` 与 `waveform_started` 阶段。
+
+[GitHub Actions 运行 31719158757](https://github.com/songpy97/spycut/actions/runs/31719158757) 已在 `windows-2022` x64 runner 上完成完整检查、原生 NSIS 构建、静默安装、必需文件核对和静默卸载，并发布 `SpyCut_0.1.4_x64-setup.exe`（75,425,986 bytes，SHA-256 `0b125b9e86cfb2114d0a884605faa9bc7d7e07e3808658621fd877306f4ad832`）。安装包门禁已通过；按钮命中与实际波形生成仍需在用户的真实 Windows 环境复测。
