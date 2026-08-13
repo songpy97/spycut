@@ -70,3 +70,7 @@
 0.1.3 在 Windows 上取消导入关键路径中的自动波形请求：先等待预览加载完成或明确失败，再由用户点击“生成音频波形”。macOS 保持自动生成。新增的 `waveform_lifecycle` 日志会记录 `session_applied`、`preview_loaded`、`request_prepared` 与 `request_dispatched`，且不包含项目 ID、源路径、文件名或预览 URL。
 
 [GitHub Actions 运行 31716962768](https://github.com/songpy97/spycut/actions/runs/31716962768) 已在 `windows-2022` x64 runner 上完成完整检查、原生 NSIS 构建、静默安装、必需文件核对和静默卸载，并发布 `SpyCut_0.1.3_x64-setup.exe`（75,416,616 bytes，SHA-256 `a1d365b10452826cfd6db47b8badf093cf47bdebdbf2b5eab49bcb37113560e6`）。真实 Windows 视频导入和点击生成波形仍需用户机器复测，不能仅凭安装包冒烟写成闪退已解决。
+
+## 0.1.4 波形按钮命中修复
+
+0.1.3 已确认 Windows 可以顺利导入原问题视频，但波形容器的 `pointer-events: none` 使“生成音频波形”按钮事件穿透到时间轴，用户点击只会移动播放头。0.1.4 保留波形轨道空白区域的 Scrub 穿透，只为按钮设置独立命中和更高层级，并用静态 CSS 回归测试锁定该规则。发布后仍需在真实 Windows 上确认按钮可以点击并进入 `request_prepared`、`request_dispatched` 与 `waveform_started` 阶段。

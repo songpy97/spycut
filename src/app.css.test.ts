@@ -20,4 +20,9 @@ describe("editor layout sizing", () => {
     expect(videoRule).toMatch(/position\s*:\s*absolute\s*;/);
     expect(videoRule).toMatch(/inset\s*:\s*0\s*;/);
   });
+
+  it("keeps the manual waveform action clickable above the scrub track", () => {
+    expect(ruleFor(".timeline-waveform")).toMatch(/pointer-events\s*:\s*none\s*;/);
+    expect(ruleFor(".timeline-waveform-status button")).toMatch(/pointer-events\s*:\s*auto\s*;/);
+  });
 });
