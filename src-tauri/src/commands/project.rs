@@ -18,7 +18,7 @@ use crate::{
     infrastructure::{
         audio_waveform::{AudioWaveform, extract_audio_waveform},
         diagnostics::{DiagnosticLevel, DiagnosticLog},
-        fingerprint::{fingerprint_source, source_identity_matches},
+        fingerprint::fingerprint_source,
         preview_server::PreviewServer,
         probe::probe_media,
         project_store::{ProjectStore, ProjectStoreError},
@@ -165,12 +165,20 @@ pub async fn open_source(
         "stage=workflow_gate",
     );
     let _workflow_guard = state.workflow_gate.lock().await;
-    ensure_editing_available(&export_runtime).await?;
-    let source_path = PathBuf::from(path);
-    let ffprobe = locate_media_tool(MediaTool::Ffprobe).map_err(CommandError::internal)?;
-    let media = probe_media(&ffprobe, &source_path)
+    ensure_editing_available(&export_runtime)
         .await
-        .map_err(|error| CommandError::new("probe_failed", error.to_string()))?;
+        .inspect_err(|error| {
+            record_source_open_failure(&diagnostics, started, "workflow_gate", &error.message);
+        })?;
+    let source_path = PathBuf::from(path);
+    let ffprobe = locate_media_tool(MediaTool::Ffprobe).map_err(|error| {
+        record_source_open_failure(&diagnostics, started, "ffprobe_lookup", &error.to_string());
+        CommandError::internal(error)
+    })?;
+    let media = probe_media(&ffprobe, &source_path).await.map_err(|error| {
+        record_source_open_failure(&diagnostics, started, "media_probe", &error.to_string());
+        CommandError::new("probe_failed", error.to_string())
+    })?;
     diagnostics.record(
         DiagnosticLevel::Info,
         "source_probe_completed",
@@ -182,8 +190,24 @@ pub async fn open_source(
     let fingerprint_path = source_path.clone();
     let source = tokio::task::spawn_blocking(move || fingerprint_source(&fingerprint_path))
         .await
-        .map_err(CommandError::internal)?
-        .map_err(|error| CommandError::new("fingerprint_failed", error.to_string()))?;
+        .map_err(|error| {
+            record_source_open_failure(
+                &diagnostics,
+                started,
+                "fingerprint_task",
+                &error.to_string(),
+            );
+            CommandError::internal(error)
+        })?
+        .map_err(|error| {
+            record_source_open_failure(
+                &diagnostics,
+                started,
+                "source_fingerprint",
+                &error.to_string(),
+            );
+            CommandError::new("fingerprint_failed", error.to_string())
+        })?;
     diagnostics.record(
         DiagnosticLevel::Info,
         "source_fingerprint_completed",
@@ -195,8 +219,25 @@ pub async fn open_source(
     let existing =
         tokio::task::spawn_blocking(move || store.find_matching_source(&source_for_lookup))
             .await
-            .map_err(CommandError::internal)?
-            .map_err(project_load_error)?;
+            .map_err(|error| {
+                record_source_open_failure(
+                    &diagnostics,
+                    started,
+                    "project_lookup_task",
+                    &error.to_string(),
+                );
+                CommandError::internal(error)
+            })?
+            .map_err(|error| {
+                let command_error = project_load_error(error);
+                record_source_open_failure(
+                    &diagnostics,
+                    started,
+                    "project_lookup",
+                    &command_error.message,
+                );
+                command_error
+            })?;
 
     let resumed = existing.is_some();
     diagnostics.record(
@@ -209,15 +250,35 @@ pub async fn open_source(
     project.media = media;
     project.touch();
 
-    persist_project(state.store.clone(), project.clone()).await?;
+    persist_project(state.store.clone(), project.clone())
+        .await
+        .inspect_err(|error| {
+            record_source_open_failure(&diagnostics, started, "project_persist", &error.message);
+        })?;
 
     let canonical_source = PathBuf::from(&project.source.canonical_path);
     let preview_url = preview_server
         .publish_source(&canonical_source)
-        .map_err(CommandError::internal)?;
+        .map_err(|error| {
+            record_source_open_failure(
+                &diagnostics,
+                started,
+                "preview_publish",
+                &error.to_string(),
+            );
+            CommandError::internal(error)
+        })?;
 
     let session = ProjectSession::new(project);
-    let projection = session.projection().map_err(CommandError::internal)?;
+    let projection = session.projection().map_err(|error| {
+        record_source_open_failure(
+            &diagnostics,
+            started,
+            "session_projection",
+            &error.to_string(),
+        );
+        CommandError::internal(error)
+    })?;
     *state.session.write().await = Some(session);
 
     diagnostics.record(
@@ -233,10 +294,27 @@ pub async fn open_source(
     })
 }
 
+fn record_source_open_failure(
+    diagnostics: &DiagnosticLog,
+    started: Instant,
+    stage: &str,
+    error: &str,
+) {
+    diagnostics.record(
+        DiagnosticLevel::Error,
+        "source_open_failed",
+        &format!(
+            "stage={stage} elapsed_ms={} error={error}",
+            started.elapsed().as_millis()
+        ),
+    );
+}
+
 #[tauri::command]
 pub async fn get_session(
     state: State<'_, ManagedState>,
     preview_server: State<'_, PreviewServer>,
+    diagnostics: State<'_, DiagnosticLog>,
 ) -> Result<Option<OpenSourceResult>, CommandError> {
     if let Some((projection, source_path)) = state
         .session
@@ -254,77 +332,31 @@ pub async fn get_session(
     {
         let preview_url = preview_server
             .publish_source(&source_path)
-            .map_err(CommandError::internal)?;
+            .map_err(|error| {
+                diagnostics.record(
+                    DiagnosticLevel::Error,
+                    "session_query_failed",
+                    &format!("stage=preview_publish error={error}"),
+                );
+                CommandError::internal(error)
+            })?;
+        diagnostics.record(
+            DiagnosticLevel::Info,
+            "session_query_completed",
+            "source=memory",
+        );
         return Ok(Some(OpenSourceResult {
             session: projection,
             resumed: true,
             preview_url,
         }));
     }
-
-    let store = state.store.clone();
-    let Some(cached_project) = tokio::task::spawn_blocking(move || store.load_most_recent())
-        .await
-        .map_err(CommandError::internal)?
-        .map_err(project_load_error)?
-    else {
-        return Ok(None);
-    };
-    let source_path = PathBuf::from(&cached_project.source.canonical_path);
-    if !source_path.is_file() {
-        return Err(CommandError::new(
-            "last_source_missing",
-            "上次课程的源视频已移动或不存在，请重新选择原视频",
-        ));
-    }
-    let ffprobe = locate_media_tool(MediaTool::Ffprobe).map_err(CommandError::internal)?;
-    let media = probe_media(&ffprobe, &source_path)
-        .await
-        .map_err(|error| CommandError::new("probe_failed", error.to_string()))?;
-    let fingerprint_path = source_path.clone();
-    let current_source = tokio::task::spawn_blocking(move || fingerprint_source(&fingerprint_path))
-        .await
-        .map_err(CommandError::internal)?
-        .map_err(|error| CommandError::new("fingerprint_failed", error.to_string()))?;
-    let store = state.store.clone();
-    let source_for_lookup = current_source.clone();
-    let restored =
-        tokio::task::spawn_blocking(move || store.find_matching_source(&source_for_lookup))
-            .await
-            .map_err(CommandError::internal)?
-            .map_err(project_load_error)?;
-    let Some(mut project) = restored else {
-        if !source_identity_matches(&cached_project.source, &current_source) {
-            return Err(CommandError::new(
-                "last_source_changed",
-                "上次课程的源视频已经发生变化，未自动套用旧标记；请重新打开并核对",
-            ));
-        }
-        return Err(CommandError::new(
-            "last_project_missing",
-            "上次课程的项目设置不存在，请重新选择原视频",
-        ));
-    };
-    if !source_identity_matches(&project.source, &current_source) {
-        return Err(CommandError::new(
-            "last_source_changed",
-            "上次课程的源视频已经发生变化，未自动套用旧标记；请重新打开并核对",
-        ));
-    }
-    project.source = current_source;
-    project.media = media;
-    let source_path = PathBuf::from(&project.source.canonical_path);
-    let preview_url = preview_server
-        .publish_source(&source_path)
-        .map_err(CommandError::internal)?;
-    let session = ProjectSession::new(project);
-    let projection = session.projection().map_err(CommandError::internal)?;
-    *state.session.write().await = Some(session);
-    Ok(Some(OpenSourceResult {
-        session: projection,
-        resumed: true,
-        preview_url,
-    }))
+    diagnostics.record(
+        DiagnosticLevel::Info,
+        "session_query_completed",
+        "source=empty",
+    );
+    Ok(None)
 }
 
 #[tauri::command]

@@ -6,6 +6,7 @@ const api = vi.hoisted(() => ({
   tauri: false,
   addDeleteInterval: vi.fn(),
   getAudioWaveform: vi.fn(),
+  getLaunchSource: vi.fn(),
   setPlayhead: vi.fn(),
   getSession: vi.fn(),
   chooseSource: vi.fn(),
@@ -16,7 +17,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock("./lib/api/tauri", () => ({
   runningInTauri: () => api.tauri,
-  getLaunchSource: vi.fn(async () => null),
+  getLaunchSource: (...args: unknown[]) => api.getLaunchSource(...args),
   getSession: (...args: unknown[]) => api.getSession(...args),
   listRecoverableExports: vi.fn(async () => []),
   onExportProgress: vi.fn(async () => () => {}),
@@ -53,6 +54,8 @@ describe("App timeline workflow", () => {
     api.addDeleteInterval.mockReset();
     api.getAudioWaveform.mockReset();
     api.getAudioWaveform.mockResolvedValue({ samplesPerSecond: 50, peaks: [0, 80, 160, 0] });
+    api.getLaunchSource.mockReset();
+    api.getLaunchSource.mockResolvedValue(null);
     api.setPlayhead.mockReset();
     api.getSession.mockReset();
     api.chooseSource.mockReset();
@@ -61,6 +64,17 @@ describe("App timeline workflow", () => {
     api.recordFrontendDiagnostic.mockResolvedValue(undefined);
     api.revealDiagnosticLog.mockReset();
     api.revealDiagnosticLog.mockResolvedValue(undefined);
+  });
+
+  it("starts with an empty workspace instead of restoring the recent-project cache", async () => {
+    api.tauri = true;
+    api.getSession.mockResolvedValue({ session: createDemoSession(), resumed: true, previewUrl: "" });
+
+    render(App);
+
+    expect(await screen.findByRole("button", { name: /打开 MP4 录屏/ })).toBeEnabled();
+    expect(api.getSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole("group", { name: "源视频编辑时间轴" })).not.toBeInTheDocument();
   });
 
   it("ignores a waveform result that arrives after switching projects", async () => {
@@ -73,9 +87,11 @@ describe("App timeline workflow", () => {
     const delayedFirst = new Promise<{ samplesPerSecond: number; peaks: number[] }>((resolve) => {
       resolveFirst = resolve;
     });
-    api.getSession.mockResolvedValue({ session: first, resumed: true, previewUrl: "" });
+    api.getLaunchSource.mockResolvedValue("/tmp/first.mp4");
     api.chooseSource.mockResolvedValue("/tmp/second.mp4");
-    api.openSource.mockResolvedValue({ session: second, resumed: false, previewUrl: "" });
+    api.openSource
+      .mockResolvedValueOnce({ session: first, resumed: true, previewUrl: "" })
+      .mockResolvedValueOnce({ session: second, resumed: false, previewUrl: "" });
     api.getAudioWaveform
       .mockImplementationOnce(() => delayedFirst)
       .mockResolvedValueOnce({ samplesPerSecond: 50, peaks: [0, 20, 20, 0] });
@@ -98,7 +114,8 @@ describe("App timeline workflow", () => {
     api.tauri = true;
     const session = createDemoSession();
     session.project.lastPlayheadUs = 0;
-    api.getSession.mockResolvedValue({ session, resumed: true, previewUrl: "" });
+    api.getLaunchSource.mockResolvedValue("/tmp/launch.mp4");
+    api.openSource.mockResolvedValue({ session, resumed: true, previewUrl: "" });
     render(App);
 
     expect(await screen.findByRole("img", { name: "源音频波形" })).toBeInTheDocument();
@@ -107,7 +124,6 @@ describe("App timeline workflow", () => {
 
   it("records uncaught frontend errors without interrupting the editor", async () => {
     api.tauri = true;
-    api.getSession.mockResolvedValue(null);
     render(App);
 
     window.dispatchEvent(new ErrorEvent("error", {
@@ -124,7 +140,6 @@ describe("App timeline workflow", () => {
 
   it("reveals the diagnostic log from the empty workspace", async () => {
     api.tauri = true;
-    api.getSession.mockResolvedValue(null);
     render(App);
 
     await fireEvent.click(await screen.findByRole("button", { name: "打开诊断日志" }));
@@ -145,7 +160,8 @@ describe("App timeline workflow", () => {
 
   it("keeps a pending start when the backend cannot save the interval", async () => {
     api.tauri = true;
-    api.getSession.mockResolvedValue({ session: createDemoSession(), resumed: true, previewUrl: "" });
+    api.getLaunchSource.mockResolvedValue("/tmp/launch.mp4");
+    api.openSource.mockResolvedValue({ session: createDemoSession(), resumed: true, previewUrl: "" });
     api.addDeleteInterval.mockRejectedValue({ code: "save_failed", message: "测试保存失败" });
     api.setPlayhead.mockResolvedValue(createDemoSession());
     render(App);

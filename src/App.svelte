@@ -10,7 +10,7 @@
   import TimelineEditor from "./lib/components/TimelineEditor.svelte";
   import { DeletionPlaybackGuard } from "./lib/player/DeletionPlaybackGuard";
   import {
-    addDeleteInterval, cancelExport, chooseDestination, chooseSource, cleanupRecoverableExport, commandMessage, diagnosePlayback, getAudioWaveform, getLaunchSource, getSession,
+    addDeleteInterval, cancelExport, chooseDestination, chooseSource, cleanupRecoverableExport, commandMessage, diagnosePlayback, getAudioWaveform, getLaunchSource,
     listRecoverableExports,
     openSource, redoEdit, removeDeleteInterval, resizeDeleteInterval, runningInTauri,
     onExportProgress, onExportResult, recordFrontendDiagnostic, revealDiagnosticLog, revealOutput, setJoinReviewed, setPlayhead,
@@ -127,10 +127,7 @@
       if (launchSource) {
         const opened = await openSource(launchSource);
         applySession(opened.session, opened.previewUrl);
-        return;
       }
-      const restored = await getSession();
-      if (restored) applySession(restored.session, restored.previewUrl);
     } catch (error) {
       errorMessage = commandMessage(error);
       void recordDiagnosticSafely("frontend_error", `restore_initial_session_failed ${diagnosticText(error)}`);

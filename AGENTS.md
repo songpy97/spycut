@@ -77,6 +77,7 @@ Svelte UI → Tauri commands → application/domain
 - 主界面只使用 `TimelineEditor.svelte` 作为唯一编辑时间轴；音频波形、删除区间轨道和细导航条共享同一个视口与播放头，不得重新引入第二套刻度或播放头。
 - 连续 Scrub 由 `PlayerPane.svelte` 合并预览 Seek，手势完成后才执行精确 Seek；区间边界调整只在松手时提交一次命令。
 - 普通预览从保留内容进入删除区间时必须自动跳到区间终点；明确手动定位落入删除区间时只放行当前区间，离开后恢复自动跳过。连接点复核的专用跳转优先于普通预览跳过。
+- 正常启动必须显示空白首页，不得依据应用数据最近项目缓存自动打开视频；只有用户手动选择、文件关联或启动参数明确指定源视频时才能打开，且仍按指纹优先恢复视频同目录 sidecar。
 - Rust 使用 `snake_case` 字段并通过 serde 输出 `camelCase` 时，必须同步更新 `src/lib/types/contracts.ts` 和 `src/lib/api/tauri.ts`。
 
 ## 4. 核心数据流
@@ -94,7 +95,7 @@ Svelte UI → Tauri commands → application/domain
 → 前端设置 <video src=previewUrl>
 ```
 
-最近项目恢复时必须重新检查源文件身份，并在验证后重新读取同目录 sidecar。不能因为项目 JSON 或应用数据缓存存在就跳过文件存在性、metadata、指纹和媒体探测。损坏、schema 不支持或与当前源指纹不符的 sidecar 不得被缓存掩盖或自动覆盖。
+正常启动不读取磁盘项目并保持空白；`get_session` 只允许返回当前进程内已经打开的会话。手动选择、文件关联或启动参数打开视频时必须重新检查源文件身份，并在验证后优先读取同目录 sidecar；不存在时才按指纹读取旧应用数据缓存。不能因为项目 JSON 或应用数据缓存存在就跳过文件存在性、metadata、指纹和媒体探测。损坏、schema 不支持或与当前源指纹不符的 sidecar 不得被缓存掩盖或自动覆盖。
 
 ### 编辑与保存
 
