@@ -67,4 +67,6 @@
 
 0.1.2 真机日志进一步确认：首次导入在 `resumed=false` 时仍异常退出，且 `source_open_completed` 已写入而 `waveform_started` 尚未出现。播放器、HTML 视频适配器和 Range 预览服务相对波形功能引入前没有变化，因此 0.1.3 将回归边界收窄到导入后同时挂载界面、加载预览与自动发起波形 IPC 的前端时序。
 
-0.1.3 在 Windows 上取消导入关键路径中的自动波形请求：先等待预览加载完成或明确失败，再由用户点击“生成音频波形”。macOS 保持自动生成。新增的 `waveform_lifecycle` 日志会记录 `session_applied`、`preview_loaded`、`request_prepared` 与 `request_dispatched`，且不包含项目 ID、源路径、文件名或预览 URL。源码验证完成后仍须等待 Windows 原生安装包冒烟和真实 Windows 视频导入验证，不能提前写成闪退已解决。
+0.1.3 在 Windows 上取消导入关键路径中的自动波形请求：先等待预览加载完成或明确失败，再由用户点击“生成音频波形”。macOS 保持自动生成。新增的 `waveform_lifecycle` 日志会记录 `session_applied`、`preview_loaded`、`request_prepared` 与 `request_dispatched`，且不包含项目 ID、源路径、文件名或预览 URL。
+
+[GitHub Actions 运行 31716962768](https://github.com/songpy97/spycut/actions/runs/31716962768) 已在 `windows-2022` x64 runner 上完成完整检查、原生 NSIS 构建、静默安装、必需文件核对和静默卸载，并发布 `SpyCut_0.1.3_x64-setup.exe`（75,416,616 bytes，SHA-256 `a1d365b10452826cfd6db47b8badf093cf47bdebdbf2b5eab49bcb37113560e6`）。真实 Windows 视频导入和点击生成波形仍需用户机器复测，不能仅凭安装包冒烟写成闪退已解决。

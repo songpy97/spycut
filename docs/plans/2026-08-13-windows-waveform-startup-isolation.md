@@ -66,3 +66,7 @@
 2. Create and push annotated tag `v0.1.3`.
 3. Monitor the native macOS and Windows workflow through package and Windows install/uninstall smoke verification.
 4. Confirm all five release assets and checksums before delivery.
+
+### Release result
+
+GitHub Actions run `31716962768` completed both native verification jobs, macOS and Windows packaging, the Windows silent install/content/uninstall smoke test, and prerelease publication. Tag `v0.1.3` points to commit `3c433a7e56570a7597605c834e7b6202dee1e6c7`; all five expected DMG, ZIP, NSIS and checksum assets were published.

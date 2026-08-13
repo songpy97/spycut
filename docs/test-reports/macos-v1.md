@@ -1,5 +1,7 @@
 # SpyCut V1 macOS 验收记录
 
+> 2026-08-13 0.1.3 发布补充：[GitHub Actions 运行 31716962768](https://github.com/songpy97/spycut/actions/runs/31716962768) 已在 `macos-15` ARM64 runner 上完成完整检查和原生打包。发布产物为 `SpyCut_0.1.3_aarch64.dmg`（26,153,971 bytes，SHA-256 `fd23c1866e3ea41f2bf417815d6474414bd198f95547e38f327b9e139b4478d0`）及 `SpyCut_0.1.3_aarch64.zip`（23,708,551 bytes，SHA-256 `60d68e6f328aa4c4c5db0c0d426dbf8a9a64c94592263573bfe42ec8f191c2f9`）。本次 Windows 波形启动隔离不改变 macOS 自动生成波形的行为。
+
 > 2026-08-13 发布检查补充：`scripts/package-macos.sh` 的 DMG、ZIP 和校验文件名已改为从 `tauri.conf.json` 读取当前版本，避免升级应用版本后附件仍沿用旧版本号。[GitHub Actions 运行 31711811297](https://github.com/songpy97/spycut/actions/runs/31711811297) 已用修正后的脚本在 `macos-15` ARM64 runner 上重新生成并发布 0.1.2 产物。
 
 ## 0.1.2 原生发布包
