@@ -33,20 +33,38 @@ pub fn record_frontend_diagnostic(
     message: String,
     log: State<'_, DiagnosticLog>,
 ) -> Result<(), DiagnosticCommandError> {
-    if !matches!(
-        kind.as_str(),
-        "frontend_ready" | "frontend_error" | "unhandled_rejection" | "player_error"
-    ) {
+    let Some(level) = frontend_diagnostic_level(&kind) else {
         return Err(DiagnosticCommandError {
             code: "invalid_diagnostic_kind".into(),
             message: "不支持的诊断事件类型".into(),
         });
-    }
-    let level = if kind == "frontend_ready" {
-        DiagnosticLevel::Info
-    } else {
-        DiagnosticLevel::Error
     };
     log.record(level, &kind, &message);
     Ok(())
+}
+
+fn frontend_diagnostic_level(kind: &str) -> Option<DiagnosticLevel> {
+    match kind {
+        "frontend_ready" | "waveform_lifecycle" => Some(DiagnosticLevel::Info),
+        "frontend_error" | "unhandled_rejection" | "player_error" => Some(DiagnosticLevel::Error),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_only_fixed_frontend_diagnostic_kinds() {
+        assert_eq!(
+            frontend_diagnostic_level("waveform_lifecycle"),
+            Some(DiagnosticLevel::Info)
+        );
+        assert_eq!(
+            frontend_diagnostic_level("player_error"),
+            Some(DiagnosticLevel::Error)
+        );
+        assert_eq!(frontend_diagnostic_level("arbitrary_event"), None);
+    }
 }

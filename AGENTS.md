@@ -128,6 +128,7 @@ sidecar 保存失败必须回滚内存项目和撤销历史；应用数据缓存
 
 ```text
 打开或恢复项目
+→ macOS 自动调用；Windows 等待预览结束后由用户手动触发
 → 前端携带当前 projectId 调用 get_audio_waveform
 → audio_waveform.rs 用受监督 FFmpeg 只解码第一条音轨
 → 8 kHz 单声道 PCM 按 20 ms 聚合为 8 位峰值
@@ -137,6 +138,7 @@ sidecar 保存失败必须回滚内存项目和撤销历史；应用数据缓存
 - 波形是源媒体的临时派生视图，不写入项目 sidecar，也不能成为编辑真相源。
 - 波形分析必须流式读取、设置有限总超时，并在超时或失败后终止和回收 FFmpeg；失败不得阻断区间编辑或导出。
 - `get_audio_waveform` 必须在分析前后校验 `projectId`；前端也必须丢弃切换项目后迟到的结果。
+- Windows 导入关键路径不得自动启动波形 IPC；预览加载完成或明确失败后才显示可用的手动生成入口。改变该隔离策略必须先完成真实 Windows 回归。
 - 波形、删除区间、播放头、刻度和全片导航必须使用同一原始时间坐标；点击或拖动波形复用现有 Scrub 预览与松手精确 Seek。
 
 ### 精确导出
@@ -163,6 +165,7 @@ FFmpeg/FFprobe 必须以受监督子进程运行：设置超时或进度监控�
 ```
 
 - Tauri 只通过 `get_diagnostic_status` 暴露受控日志位置，通过 `record_frontend_diagnostic` 接受固定类型的前端错误事件；前端不得传入任意日志路径。
+- `waveform_lifecycle` 只记录固定的会话、预览和请求阶段，不得包含项目 ID、源路径、文件名或预览 URL。
 - 诊断日志位于应用数据目录的 `diagnostics/`，当前文件超过 5 MiB 后只轮换保留一份旧文件；每条记录必须及时刷新。
 - 日志不得记录视频文件名、绝对路径、预览 URL/令牌或课程内容；外部错误文本必须限长并脱敏。
 - Windows 上所有生产 FFmpeg/FFprobe 子进程必须通过 `media_command` 创建并使用 `CREATE_NO_WINDOW`，避免导入、波形或导出时弹出控制台窗口。

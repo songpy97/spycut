@@ -56,6 +56,8 @@
   let waveformState: "loading" | "ready" | "unavailable" | "failed" = "unavailable";
   let waveformMessage = "";
   let waveformRequestSequence = 0;
+  let waveformCanRequest = false;
+  let previewReady = false;
 
   const PLAYHEAD_SAVE_INTERVAL_MS = 2_000;
   const deletionPlaybackGuard = new DeletionPlaybackGuard();
@@ -192,21 +194,26 @@
     currentSession = next;
     playheadUs = preservePlayhead && !projectChanged ? previousPlayheadUs : next.project.lastPlayheadUs;
     if (projectChanged) {
+      previewReady = false;
       resetPlayheadPersistence();
       deletionPlaybackGuard.reset(playheadUs);
       deletionSkipInFlight = false;
       playbackSeekSequence += 1;
       playbackSeekTokens.clear();
-      beginWaveformLoad(next.project);
+      initializeWaveform(next.project);
+      void recordDiagnosticSafely(
+        "waveform_lifecycle",
+        `stage=session_applied mode=${usesManualWaveformStart() ? "manual" : "automatic"}`
+      );
     }
     if (!demo && previewUrl) mediaSourceUrl = previewUrl;
     if (selectedId !== null && !next.project.deleteIntervals.some((item) => item.id === selectedId)) selectedId = null;
   }
 
-  function beginWaveformLoad(nextProject: ProjectV1) {
+  function initializeWaveform(nextProject: ProjectV1) {
     const requestSequence = ++waveformRequestSequence;
-    const projectId = nextProject.projectId;
     waveform = null;
+    waveformCanRequest = false;
     if (!nextProject.media.hasAudio) {
       waveformState = "unavailable";
       waveformMessage = "源视频没有音轨";
@@ -219,9 +226,36 @@
       return;
     }
 
+    if (usesManualWaveformStart()) {
+      waveformCanRequest = true;
+      waveformState = "unavailable";
+      waveformMessage = "视频加载完成后可生成音频波形";
+      return;
+    }
+
+    void loadWaveform(nextProject, requestSequence, "automatic");
+  }
+
+  async function requestWaveform() {
+    if (!project || !waveformCanRequest || !previewReady || waveformState === "loading") return;
+    const requestSequence = ++waveformRequestSequence;
+    await loadWaveform(project, requestSequence, "manual");
+  }
+
+  async function loadWaveform(
+    nextProject: ProjectV1,
+    requestSequence: number,
+    trigger: "automatic" | "manual"
+  ) {
+    const projectId = nextProject.projectId;
+    waveformCanRequest = false;
+
     waveformState = "loading";
     waveformMessage = "正在分析音频…";
-    void getAudioWaveform(projectId)
+    await recordDiagnosticSafely("waveform_lifecycle", `stage=request_prepared trigger=${trigger}`);
+    const request = getAudioWaveform(projectId);
+    void recordDiagnosticSafely("waveform_lifecycle", `stage=request_dispatched trigger=${trigger}`);
+    void request
       .then((result) => {
         if (requestSequence !== waveformRequestSequence || currentSession?.project.projectId !== projectId) return;
         waveform = result.peaks.length > 0 ? result : null;
@@ -232,8 +266,21 @@
         if (requestSequence !== waveformRequestSequence || currentSession?.project.projectId !== projectId) return;
         waveform = null;
         waveformState = "failed";
+        waveformCanRequest = usesManualWaveformStart();
         waveformMessage = `波形生成失败，可继续剪切：${commandMessage(error)}`;
       });
+  }
+
+  function usesManualWaveformStart(): boolean {
+    return runningInTauri() && navigator.userAgent.includes("Windows");
+  }
+
+  function handlePreviewLoaded() {
+    previewReady = true;
+    if (waveformCanRequest && waveformState === "unavailable") {
+      waveformMessage = "视频已加载，点击生成音频波形";
+    }
+    void recordDiagnosticSafely("waveform_lifecycle", "stage=preview_loaded");
   }
 
   function createDemoWaveform(durationUs: number): AudioWaveform {
@@ -650,6 +697,10 @@
   }
 
   async function handlePlayerFailure(message: string) {
+    previewReady = true;
+    if (waveformCanRequest && waveformState === "unavailable") {
+      waveformMessage = "预览加载失败，仍可单独生成音频波形";
+    }
     void recordDiagnosticSafely("player_error", message);
     if (!media || demo || !runningInTauri()) {
       errorMessage = message;
@@ -711,7 +762,7 @@
   }
 
   async function recordDiagnosticSafely(
-    kind: "frontend_ready" | "frontend_error" | "unhandled_rejection" | "player_error",
+    kind: "frontend_ready" | "frontend_error" | "unhandled_rejection" | "player_error" | "waveform_lifecycle",
     message: string
   ) {
     if (!runningInTauri()) return;
@@ -750,6 +801,7 @@
           {playbackRate}
           on:time={(event: CustomEvent<{ playheadUs: number }>) => handleTime(event.detail.playheadUs)}
           on:state={(event: CustomEvent<{ playing: boolean }>) => playing = event.detail.playing}
+          on:loaded={handlePreviewLoaded}
           on:error={(event: CustomEvent<{ message: string }>) => handlePlayerFailure(event.detail.message)}
         />
         <TransportControls
@@ -788,6 +840,8 @@
       {waveform}
       {waveformState}
       {waveformMessage}
+      {waveformCanRequest}
+      waveformRequestDisabled={!previewReady || waveformState === "loading"}
       on:scrubStart={beginScrub}
       on:scrubPreview={(event) => previewScrub(event.detail.playheadUs)}
       on:scrubCommit={(event) => commitScrub(event.detail.playheadUs)}
@@ -799,6 +853,7 @@
       on:cancelMark={cancelMark}
       on:undo={undo}
       on:redo={redo}
+      on:waveformRequest={requestWaveform}
     />
 
     <footer class="status-bar">

@@ -70,6 +70,28 @@ describe("TimelineEditor", () => {
     expect(screen.getByRole("button", { name: /完成删除区间/ })).toBeEnabled();
   });
 
+  it("offers a separately enabled manual waveform request", async () => {
+    const requests = vi.fn();
+    const view = render(TimelineEditor, {
+      props: {
+        ...props,
+        waveform: null,
+        waveformState: "unavailable",
+        waveformMessage: "视频加载完成后可生成音频波形",
+        waveformCanRequest: true,
+        waveformRequestDisabled: true
+      },
+      events: { waveformRequest: requests }
+    });
+
+    const request = screen.getByRole("button", { name: "生成音频波形" });
+    expect(request).toBeDisabled();
+    await view.rerender({ ...props, waveform: null, waveformState: "unavailable", waveformMessage: "", waveformCanRequest: true, waveformRequestDisabled: false });
+    await fireEvent.click(request);
+
+    expect(requests).toHaveBeenCalledOnce();
+  });
+
   it("uses the waveform lane as part of the shared scrub track", async () => {
     const starts = vi.fn();
     const commits = vi.fn();

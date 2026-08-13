@@ -31,6 +31,8 @@
   export let waveform: AudioWaveform | null = null;
   export let waveformState: "loading" | "ready" | "unavailable" | "failed" = "unavailable";
   export let waveformMessage = "";
+  export let waveformCanRequest = false;
+  export let waveformRequestDisabled = false;
 
   const dispatch = createEventDispatcher<{
     scrubStart: { playheadUs: number };
@@ -44,6 +46,7 @@
     cancelMark: void;
     undo: void;
     redo: void;
+    waveformRequest: void;
   }>();
 
   type ScrubGesture = { kind: "scrub"; pointerId: number; originUs: number; currentUs: number };
@@ -505,6 +508,14 @@
           <div class:loading={waveformState === "loading"} class:failed={waveformState === "failed"} class="timeline-waveform-status" role="status" aria-label="音频波形状态">
             {#if waveformState === "loading"}<i></i>{/if}
             <span>{waveformMessage || "没有可显示的音频波形"}</span>
+            {#if waveformCanRequest}
+              <button
+                type="button"
+                disabled={waveformRequestDisabled}
+                on:pointerdown|stopPropagation
+                on:click|stopPropagation={() => dispatch("waveformRequest")}
+              >生成音频波形</button>
+            {/if}
           </div>
         {/if}
       </div>

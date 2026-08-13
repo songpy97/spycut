@@ -103,6 +103,8 @@ GitHub Actions 的 `package` 工作流可手动运行，也会在推送 `v*` 标
 
 Windows 原生工作流完成的是安装器完整性、安装内容和卸载冒烟验收；仍需在真实 Windows 10/11 x64 机器上完成 WebView2、H.264/H.265 预览、波形和导出验收。
 
+为隔离部分 Windows WebView2 环境在导入后初始化阶段的异常退出，Windows 版会先加载视频预览，再由用户在时间轴波形区域点击“生成音频波形”；macOS 仍在导入后自动生成。波形失败不会阻断区间编辑和导出。
+
 完整架构与边界条件见 [SpyCut V1 开发文档](docs/SpyCut-V1-开发文档.md)，实施记录见 [V1 验收报告](docs/SpyCut-V1-验收报告.md)，平台明细见 [macOS 验收记录](docs/test-reports/macos-v1.md) 与 [Windows 交叉构建记录](docs/test-reports/windows-v1.md)。
 
 ## 发布注意

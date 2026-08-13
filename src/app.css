@@ -202,6 +202,9 @@ kbd { font: 650 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .timeline-waveform-status.loading { color: #8b927f; }
 .timeline-waveform-status.failed { color: #a47769; }
 .timeline-waveform-status i { width: 10px; height: 10px; border: 1px solid #4c5147; border-top-color: #9baa8b; border-radius: 50%; animation: spin .8s linear infinite; }
+.timeline-waveform-status button { height: 24px; padding: 0 9px; border: 1px solid #58644e; background: #252b22; color: #b8c7aa; font-size: 8px; cursor: pointer; }
+.timeline-waveform-status button:hover:not(:disabled) { border-color: #91ad78; color: #d8e6ca; }
+.timeline-waveform-status button:disabled { cursor: wait; opacity: .45; }
 .timeline-delete-label { position: absolute; z-index: 4; left: 8px; bottom: 5px; display: flex; align-items: center; gap: 7px; color: #55564e; font-size: 7px; pointer-events: none; }
 .timeline-delete-label b { color: #696a61; font-weight: 700; letter-spacing: .04em; }
 .timeline-delete-label span { padding-left: 7px; border-left: 1px solid #42433b; }

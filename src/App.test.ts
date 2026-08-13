@@ -48,8 +48,13 @@ vi.mock("./lib/api/tauri", () => ({
 
 import App from "./App.svelte";
 
+function setUserAgent(value: string) {
+  Object.defineProperty(window.navigator, "userAgent", { configurable: true, value });
+}
+
 describe("App timeline workflow", () => {
   beforeEach(() => {
+    setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
     api.tauri = false;
     api.addDeleteInterval.mockReset();
     api.getAudioWaveform.mockReset();
@@ -120,6 +125,32 @@ describe("App timeline workflow", () => {
 
     expect(await screen.findByRole("img", { name: "源音频波形" })).toBeInTheDocument();
     await waitFor(() => expect(api.getAudioWaveform).toHaveBeenCalledWith(session.project.projectId));
+  });
+
+  it("waits for an explicit waveform request after the Windows preview loads", async () => {
+    setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    api.tauri = true;
+    const session = createDemoSession();
+    session.project.lastPlayheadUs = 0;
+    api.getLaunchSource.mockResolvedValue("C:\\fixture\\lesson.mp4");
+    api.openSource.mockResolvedValue({
+      session,
+      resumed: false,
+      previewUrl: "http://127.0.0.1:43123/private-token"
+    });
+    render(App);
+
+    const request = await screen.findByRole("button", { name: "生成音频波形" });
+    expect(request).toBeDisabled();
+    expect(api.getAudioWaveform).not.toHaveBeenCalled();
+
+    await fireEvent.loadedMetadata(document.querySelector("video") as HTMLVideoElement);
+    await waitFor(() => expect(request).toBeEnabled());
+    expect(api.getAudioWaveform).not.toHaveBeenCalled();
+
+    await fireEvent.click(request);
+    await waitFor(() => expect(api.getAudioWaveform).toHaveBeenCalledOnce());
+    expect(api.getAudioWaveform).toHaveBeenCalledWith(session.project.projectId);
   });
 
   it("records uncaught frontend errors without interrupting the editor", async () => {

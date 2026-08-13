@@ -54,7 +54,7 @@ export async function getDiagnosticStatus(): Promise<DiagnosticStatus> {
 }
 
 export async function recordFrontendDiagnostic(
-  kind: "frontend_ready" | "frontend_error" | "unhandled_rejection" | "player_error",
+  kind: "frontend_ready" | "frontend_error" | "unhandled_rejection" | "player_error" | "waveform_lifecycle",
   message: string
 ): Promise<void> {
   return invoke<void>("record_frontend_diagnostic", { kind, message });
