@@ -25,6 +25,8 @@ describe("release packaging policy", () => {
     expect(workflow).toContain("./scripts/package-windows.ps1 -SkipChecks -SmokeTest");
     expect(workflow).toContain("bundle/nsis/*.sha256");
     expect(workflow).toContain("bash scripts/package-macos.sh");
+    expect(workflow).toContain("bundle/macos/*_checksums.txt");
+    expect(workflow).not.toContain("docs/release/*_checksums.txt");
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("startsWith(github.ref, 'refs/tags/v')");
     expect(windowsScript).toContain("Running the NSIS self-check and silent installation");

@@ -223,6 +223,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 实际命令、签名状态、交叉构建限制和产物校验以 `README.md`、`docs/test-reports/` 与 `docs/release/` 为准。可发布 Windows 安装器必须在 Windows 原生生成并通过安装/卸载冒烟验收；macOS/Linux 交叉编译只可用于编译检查，不能替代 Windows 打包。安装器冒烟通过也不能替代真实 Windows 10/11 + WebView2 媒体验收。
 
 GitHub Actions 在推送 `v*` 标签时于 `macos-15` ARM64 和 `windows-2022` x64 runner 并行生成包；只有两个原生目标都成功，才允许自动创建包含安装包和校验文件的预发布 GitHub Release。手动 `workflow_dispatch` 只上传 Actions 产物，不创建 Release。
+每个平台的校验文件必须从本次构建的 bundle 目录上传，禁止用宽泛 glob 混入 `docs/release/` 中的历史版本校验文件。
 
 所有构建、测试、FFmpeg 和容器命令必须使用有限超时或非交互批处理模式。工具返回 session id 时必须持续轮询到退出，或明确终止会话；不能在命令已经结束后仍让任务停在 Working 状态。
 
