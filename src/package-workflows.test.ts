@@ -11,6 +11,7 @@ describe("release packaging policy", () => {
     const retiredScript = read("scripts/package-all-macos.sh");
 
     expect(macScript).not.toMatch(/cargo-xwin|docker|orbctl|makensis|windows_installer/i);
+    expect(macScript).toContain('mkdir -p "$(dirname "$mac_dmg")"');
     expect(retiredScript).toContain("has been retired");
     expect(retiredScript).toContain("exit 2");
     expect(existsSync(resolve(root, "src-tauri/tauri.cross-windows.conf.json"))).toBe(false);

@@ -3,7 +3,7 @@
 [![CI](https://github.com/songpy97/spycut/actions/workflows/ci.yml/badge.svg)](https://github.com/songpy97/spycut/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[下载最新版本](https://github.com/songpy97/spycut/releases/latest) · [报告问题](https://github.com/songpy97/spycut/issues) · [参与贡献](CONTRIBUTING.md)
+[下载预览版](https://github.com/songpy97/spycut/releases) · [报告问题](https://github.com/songpy97/spycut/issues) · [参与贡献](CONTRIBUTING.md)
 
 > 当前 GitHub Release 是未签名、未公证的开源预览版。Windows SmartScreen 或 macOS Gatekeeper 可能显示发布者警告；请先核对随产物提供的 SHA-256。正式公开发行仍需要 Apple Developer ID、Windows 代码签名和对应平台真机验收。
 
@@ -11,10 +11,10 @@ SpyCut 是一个只做一件事的桌面工具：在长录屏的原始时间轴�
 
 ## 当前成品
 
-- macOS Apple Silicon 安装包：`src-tauri/target/release/bundle/dmg/SpyCut_0.1.0_aarch64.dmg`
-- macOS Apple Silicon 免安装压缩包：`src-tauri/target/release/bundle/macos/SpyCut_0.1.0_aarch64.zip`
+- macOS Apple Silicon 安装包：GitHub Release 中的 `SpyCut_*_aarch64.dmg`
+- macOS Apple Silicon 免安装压缩包：GitHub Release 中的 `SpyCut_*_aarch64.zip`
 - Windows x64 NSIS 安装包：只从 Windows 原生 `package` 工作流或 Windows PowerShell 构建产物获取；macOS 交叉构建旧包已撤回
-- macOS 安装包校验值：`docs/release/SpyCut_0.1.0_checksums.txt`；Windows 原生包使用同目录 `.sha256`
+- macOS 校验值由 Release 中的 `SpyCut_*_checksums.txt` 提供；Windows 原生包使用相邻的 `.sha256`
 
 当前 macOS 包使用隔离构建的 FFmpeg 8.0.1 sidecar，不依赖 Homebrew；它只启用了 LGPL 配置和 Apple VideoToolbox。Windows 包内置固定 SHA-256 的 BtbN LGPL FFmpeg。macOS 包采用本地临时签名，Windows 包未签名；两者都尚未做正式签名或公证。
 

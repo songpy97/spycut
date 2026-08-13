@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 开源预览版 - 2026-08-13
+
+- 修复干净 GitHub macOS runner 未预先创建 DMG 目录时的打包失败。
+- Windows 安装包改为原生构建，并通过 NSIS 自检、静默安装、内容核对和静默卸载。
+
 ## Open-source release
 
 - Added the MIT license, contribution and security policies, and Dependabot configuration.

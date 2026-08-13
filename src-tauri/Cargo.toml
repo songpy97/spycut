@@ -1,6 +1,6 @@
 [package]
 name = "spycut"
-version = "0.1.0"
+version = "0.1.1"
 description = "Frame-accurate delete interval editor for lecture recordings"
 authors = ["SpyCut"]
 license = "MIT"

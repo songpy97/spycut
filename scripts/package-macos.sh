@@ -8,9 +8,9 @@ readonly script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 readonly repo_root="$(CDPATH= cd -- "$script_dir/.." && pwd)"
 readonly mac_target='aarch64-apple-darwin'
 readonly mac_app="$repo_root/src-tauri/target/release/bundle/macos/SpyCut.app"
-readonly mac_dmg="$repo_root/src-tauri/target/release/bundle/dmg/SpyCut_0.1.0_aarch64.dmg"
-readonly mac_zip="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_0.1.0_aarch64.zip"
-readonly checksums_file="$repo_root/docs/release/SpyCut_0.1.0_checksums.txt"
+readonly mac_dmg="$repo_root/src-tauri/target/release/bundle/dmg/SpyCut_0.1.1_aarch64.dmg"
+readonly mac_zip="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_0.1.1_aarch64.zip"
+readonly checksums_file="$repo_root/docs/release/SpyCut_0.1.1_checksums.txt"
 pnpm_command=()
 
 log() { printf '%s\n' "[package-macos] $*"; }
@@ -60,6 +60,9 @@ main() {
   codesign --force --deep --sign - "$mac_app"
   codesign --verify --deep --strict --verbose=2 "$mac_app"
 
+  # Building only the .app does not create Tauri's DMG output directory on a
+  # clean runner. Ensure both package destinations exist before writing them.
+  mkdir -p "$(dirname "$mac_dmg")" "$(dirname "$mac_zip")"
   ditto -c -k --sequesterRsrc --keepParent "$mac_app" "$mac_zip"
   stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/spycut-dmg-stage.XXXXXX")"
   trap '[[ -n "${stage_dir:-}" && -d "${stage_dir:-}" ]] && rm -rf -- "${stage_dir}"; if [[ -n "${verify_dir:-}" && -d "${verify_dir:-}" ]]; then hdiutil detach "${verify_dir}" >/dev/null 2>&1 || true; fi' EXIT
