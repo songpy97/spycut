@@ -7,10 +7,11 @@ export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:/opt/homebrew/bin:/opt/homebr
 readonly script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 readonly repo_root="$(CDPATH= cd -- "$script_dir/.." && pwd)"
 readonly mac_target='aarch64-apple-darwin'
+readonly app_version="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["version"])' "$repo_root/src-tauri/tauri.conf.json")"
 readonly mac_app="$repo_root/src-tauri/target/release/bundle/macos/SpyCut.app"
-readonly mac_dmg="$repo_root/src-tauri/target/release/bundle/dmg/SpyCut_0.1.1_aarch64.dmg"
-readonly mac_zip="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_0.1.1_aarch64.zip"
-readonly checksums_file="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_0.1.1_checksums.txt"
+readonly mac_dmg="$repo_root/src-tauri/target/release/bundle/dmg/SpyCut_${app_version}_aarch64.dmg"
+readonly mac_zip="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_${app_version}_aarch64.zip"
+readonly checksums_file="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_${app_version}_checksums.txt"
 pnpm_command=()
 
 log() { printf '%s\n' "[package-macos] $*"; }

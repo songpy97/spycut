@@ -54,3 +54,7 @@
 2. Push `main`, create annotated tag `v0.1.2`, and push the tag.
 3. Monitor `SpyCut CI` until macOS and Windows native packages, Windows install/uninstall smoke test and Release publication complete.
 4. Verify the prerelease page and all expected DMG, ZIP, NSIS and checksum assets.
+
+### Release correction discovered during asset verification
+
+The first `v0.1.2` run exposed a hard-coded `0.1.1` filename in `scripts/package-macos.sh`: the application was built from 0.1.2 source, but its DMG, ZIP and checksum attachment names were stale. The packaging script must derive filenames from `src-tauri/tauri.conf.json`; then the invalid prerelease and tag must be replaced and the complete native workflow rerun before delivery.

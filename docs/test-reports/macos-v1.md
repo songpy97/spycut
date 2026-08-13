@@ -1,5 +1,7 @@
 # SpyCut V1 macOS 验收记录
 
+> 2026-08-13 发布检查补充：`scripts/package-macos.sh` 的 DMG、ZIP 和校验文件名改为从 `tauri.conf.json` 读取当前版本，避免升级应用版本后附件仍沿用旧版本号。`v0.1.2` 必须在修正后的原生 macOS 工作流重新生成后才可交付。
+
 日期：2026-08-13
 
 系统：macOS 15.3.2，arm64
