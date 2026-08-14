@@ -227,6 +227,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 - `scripts/package-windows.ps1`（Windows 原生生成 NSIS；干净 Windows/CI 上必须带 `-SmokeTest` 完成静默安装与卸载验收）
 - `src-tauri/tauri.release.conf.json`
 
+Intel macOS 原生准备 FFmpeg sidecar 需要 NASM；本机使用 Homebrew 安装，GitHub Actions 的 `macos-15-intel` 打包任务会在构建前显式安装。
+
 实际命令、签名状态、交叉构建限制和产物校验以 `README.md`、`docs/test-reports/` 与 `docs/release/` 为准。可发布 Windows 安装器必须在 Windows 原生生成并通过安装/卸载冒烟验收；macOS/Linux 交叉编译只可用于编译检查，不能替代 Windows 打包。安装器冒烟通过也不能替代真实 Windows 10/11 + WebView2 媒体验收。
 macOS 打包验收必须确认 `.app` 的 `Info.plist` 声明 `icon.icns`，且同名资源实际存在于应用包中。
 

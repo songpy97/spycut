@@ -6,6 +6,11 @@ if [ "$(uname -s)" != "Darwin" ]; then
   exit 1
 fi
 
+if [ "$(uname -m)" = "x86_64" ] && ! command -v nasm >/dev/null 2>&1; then
+  printf '%s\n' 'Intel macOS FFmpeg builds require NASM. Install it with: brew install nasm' >&2
+  exit 1
+fi
+
 spycut_version='8.0.1'
 spycut_sha256='679aa13a19415d5ddab91e580084e3ab20c963c8240001e5cbb955a97bdd81b1'
 spycut_url="https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n${spycut_version}"

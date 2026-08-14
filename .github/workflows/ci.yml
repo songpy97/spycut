@@ -72,6 +72,8 @@ jobs:
           toolchain: 1.97.1
           components: rustfmt, clippy
       - run: pnpm install --frozen-lockfile
+      - if: matrix.os == 'macos-15-intel'
+        run: brew install nasm
       - if: runner.os == 'macOS'
         run: bash scripts/package-macos.sh
       - if: runner.os == 'Windows'

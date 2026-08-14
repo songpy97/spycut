@@ -44,8 +44,11 @@ describe("release packaging policy", () => {
     expect(workflow).toContain("artifact: SpyCut-macOS-arm64");
     expect(workflow).toContain("os: macos-15-intel");
     expect(workflow).toContain("artifact: SpyCut-macOS-x64");
+    expect(workflow).toContain("matrix.os == 'macos-15-intel'");
+    expect(workflow).toContain("brew install nasm");
     expect(macScript).toContain("aarch64-apple-darwin");
     expect(macScript).toContain("x86_64-apple-darwin");
     expect(macScript).toContain('SpyCut_${app_version}_${mac_arch}_checksums.txt');
+    expect(read("scripts/prepare-ffmpeg-macos.sh")).toContain("Intel macOS FFmpeg builds require NASM");
   });
 });
