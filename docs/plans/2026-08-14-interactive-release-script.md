@@ -52,6 +52,8 @@ Run `pnpm check` with `SPYCUT_RELEASE_IN_PROGRESS=1` so only the nested commit/t
 
 Set `GIT_PAGER=cat` for the complete script so no Git check or summary can open an interactive pager before the final confirmation.
 
+When the release tag exists only locally, display commits and changes not yet covered by the tag, rerun checks for pending changes, create a follow-up fix commit when needed, move only the unpublished local tag to the resulting `main`, and retry the atomic push without calculating another version. Brace variables adjacent to non-ASCII punctuation.
+
 **Step 5: Handle cancellation and retry**
 
 Restore the four backed-up version files if checks fail or the final confirmation is declined. Detect an unpushed current-version tag at HEAD and offer an atomic retry only when the worktree is clean.

@@ -138,7 +138,7 @@ bash scripts/package-macos.sh
 bash scripts/release.sh
 ```
 
-脚本会提示选择 major（大版本）、minor（中版本）或 patch（小版本），同步 `package.json`、Tauri、Cargo 和 lockfile 版本，运行 `pnpm check`，并在最终确认后把当前工作区的全部改动提交为 release commit。脚本禁用 Git 分页器，所有检查输出结束后会直接显示最终确认，不会停在 `END`。发布检查会跳过会再次启动 commit/tag/push 的嵌套发布模拟，其余前端、类型与 Rust 门禁照常执行；该发布模拟在日常测试和 CI 中仍会运行。没有全局 `pnpm` 时，脚本会优先通过 Corepack，否则通过 `npm` 临时使用仓库固定的 `pnpm@11.16.0`（首次使用 npm 回退时需要联网下载）。随后它创建注解标签，并原子推送 `main` 与 `v*` 标签；检查失败或最终确认前取消时会恢复版本文件。运行前务必查看脚本显示的 `git status`，确认当前所有改动都应进入本次发布。
+脚本会提示选择 major（大版本）、minor（中版本）或 patch（小版本），同步 `package.json`、Tauri、Cargo 和 lockfile 版本，运行 `pnpm check`，并在最终确认后把当前工作区的全部改动提交为 release commit。脚本禁用 Git 分页器，所有检查输出结束后会直接显示最终确认，不会停在 `END`。发布检查会跳过会再次启动 commit/tag/push 的嵌套发布模拟，其余前端、类型与 Rust 门禁照常执行；该发布模拟在日常测试和 CI 中仍会运行。没有全局 `pnpm` 时，脚本会优先通过 Corepack，否则通过 `npm` 临时使用仓库固定的 `pnpm@11.16.0`（首次使用 npm 回退时需要联网下载）。随后它创建注解标签，并原子推送 `main` 与 `v*` 标签；如果提交或本地标签已创建但尚未推送，下次运行会检查并提交待处理修复、把未发布标签更新到当前 `main`，再继续原子推送，而不会误增下一个版本。检查失败或最终确认前取消时会恢复版本文件。运行前务必查看脚本显示的 `git status`，确认当前所有改动都应进入本次发布。
 
 GitHub Actions 的 `package` 工作流可手动运行，也会在推送 `v*` 标签时自动运行。它分别在 `macos-15` ARM64、`macos-15-intel` x64 和 `windows-2022` x64 runner 上原生生成包；Windows job 随后静默安装到隔离目录，核对主程序、FFmpeg/FFprobe、许可证和卸载器，再完成静默卸载。只有三个原生目标全部通过，标签构建才自动创建预发布 GitHub Release；手动 `workflow_dispatch` 只上传 Actions 产物，不创建 Release。Tauri 官方说明 macOS/Linux 上的 Windows NSIS 交叉构建限制更多、测试较少，应仅作为 Windows 虚拟机和 CI 都不可用时作为最后手段，因此 SpyCut 不再把交叉构建的 NSIS 当作可发布安装器。
 

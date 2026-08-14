@@ -39,7 +39,7 @@ calculate_next_version() {
     major) printf '%s.0.0\n' "$((major + 1))" ;;
     minor) printf '%s.%s.0\n' "$major" "$((minor + 1))" ;;
     patch) printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))" ;;
-    *) die "未知版本增量：$increment（只能是 major、minor 或 patch）" ;;
+    *) die "未知版本增量：${increment}（只能是 major、minor 或 patch）" ;;
   esac
 }
 
@@ -215,17 +215,39 @@ current_release_tag="v$current_version"
 if git show-ref --verify --quiet "refs/tags/$current_release_tag" && ! remote_tag_exists "$current_release_tag"; then
   tag_commit="$(git rev-list -n 1 "$current_release_tag")"
   head_commit="$(git rev-parse HEAD)"
-  if [[ "$tag_commit" == "$head_commit" ]]; then
-    [[ -z "$(git status --porcelain)" ]] || die "发现未推送的 $current_release_tag，但工作区不干净；请先处理改动"
-    echo "发现本地 release commit 和标签 $current_release_tag 尚未推送。"
-    if confirm_release "是否重试原子推送 $release_branch 和 $current_release_tag？"; then
-      git push --atomic "$release_remote" "$release_branch" "refs/tags/$current_release_tag"
-      echo "已推送 $current_release_tag，GitHub Actions 将开始构建 Release。"
-    else
-      echo "已取消，没有修改 Git 状态。"
-    fi
+  git merge-base --is-ancestor "$tag_commit" "$head_commit" || die "未发布标签 $current_release_tag 不在当前 main 历史中"
+
+  echo "发现本地 release commit 和标签 ${current_release_tag} 尚未推送。"
+  if [[ "$tag_commit" != "$head_commit" ]]; then
+    echo "标签之后还有以下本地提交："
+    git log --oneline "$current_release_tag..HEAD"
+  fi
+  pending_changes="$(git status --porcelain)"
+  if [[ -n "$pending_changes" ]]; then
+    echo "还有以下未提交改动，将先检查并追加提交："
+    git status --short
+  fi
+  if ! confirm_release "是否把当前 main 作为 $current_release_tag 并原子推送到 GitHub？"; then
+    echo "已取消，没有修改 Git 状态。"
     exit 0
   fi
+
+  if [[ -n "$pending_changes" ]]; then
+    echo "正在检查待续发改动…"
+    SPYCUT_RELEASE_IN_PROGRESS=1 "${pnpm_command[@]}" check
+    git diff --check
+    git add -A
+    git diff --cached --check
+    git diff --cached --quiet && die "没有可提交的续发改动"
+    git commit -m "fix: complete $current_release_tag release"
+    head_commit="$(git rev-parse HEAD)"
+  fi
+  if [[ "$tag_commit" != "$head_commit" ]]; then
+    git tag -fa "$current_release_tag" -m "SpyCut $current_release_tag"
+  fi
+  git push --atomic "$release_remote" "$release_branch" "refs/tags/$current_release_tag"
+  echo "已推送 ${current_release_tag}，GitHub Actions 将开始构建 Release。"
+  exit 0
 fi
 
 if [[ -z "$requested_increment" ]]; then
@@ -354,7 +376,7 @@ git diff --cached --quiet && die "没有可提交的发布改动"
 git commit -m "release: $release_tag"
 git tag -a "$release_tag" -m "SpyCut $release_tag"
 
-echo "正在原子推送 $release_branch 和 $release_tag…"
+echo "正在原子推送 $release_branch 和 ${release_tag}…"
 if ! git push --atomic "$release_remote" "$release_branch" "refs/tags/$release_tag"; then
   echo "原子推送失败；远端不会只收到其中一部分。" >&2
   echo "本地 release commit 和标签已保留，修复连接或权限后重新运行脚本即可续推。" >&2

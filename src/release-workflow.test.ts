@@ -125,6 +125,7 @@ describe("interactive release workflow", () => {
     expect(script).toContain("src-tauri/Cargo.lock");
     expect(script.match(/confirm_release/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
     expect(script).not.toMatch(/push[^\n]*--force/);
+    expect(script).not.toMatch(/\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/);
   });
 
   it("has valid Bash syntax and documents the interactive entry point", () => {
@@ -145,6 +146,44 @@ describe("interactive release workflow", () => {
       expect(readFileSync(join(fixture.repo, "src-tauri/Cargo.toml"), "utf8")).toContain('version = "1.0.0"');
       expect(git(fixture.repo, "tag", "--list")).toBe("");
       expect(git(fixture.repo, "status", "--porcelain")).toBe("?? CHANGELOG.md");
+    } finally {
+      rmSync(fixture.base, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("commits pending fixes and continues an unpublished tagged release", () => {
+    const fixture = createReleaseFixture();
+    try {
+      for (const path of [
+        "package.json",
+        "src-tauri/tauri.conf.json",
+        "src-tauri/Cargo.toml",
+        "src-tauri/Cargo.lock"
+      ]) {
+        const absolutePath = join(fixture.repo, path);
+        writeFileSync(absolutePath, readFileSync(absolutePath, "utf8").replaceAll("1.0.0", "1.0.1"));
+      }
+      git(
+        fixture.repo,
+        "add",
+        "package.json",
+        "src-tauri/tauri.conf.json",
+        "src-tauri/Cargo.toml",
+        "src-tauri/Cargo.lock"
+      );
+      git(fixture.repo, "commit", "-m", "release: v1.0.1");
+      git(fixture.repo, "tag", "-a", "v1.0.1", "-m", "SpyCut v1.0.1");
+
+      const result = runFixtureRelease(fixture.repo, fixture.bin, "y\n");
+
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(git(fixture.repo, "log", "-1", "--format=%s")).toBe("fix: complete v1.0.1 release");
+      expect(git(fixture.repo, "status", "--porcelain")).toBe("");
+      expect(git(fixture.repo, "rev-parse", "HEAD")).toBe(git(fixture.repo, "rev-parse", "v1.0.1^{commit}"));
+      expect(git(fixture.repo, "rev-parse", "HEAD")).toBe(git(fixture.remote, "rev-parse", "refs/heads/main"));
+      expect(git(fixture.repo, "rev-parse", "HEAD")).toBe(
+        git(fixture.remote, "rev-parse", "refs/tags/v1.0.1^{commit}")
+      );
     } finally {
       rmSync(fixture.base, { recursive: true, force: true });
     }
