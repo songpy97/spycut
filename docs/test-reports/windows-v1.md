@@ -76,3 +76,13 @@
 0.1.3 已确认 Windows 可以顺利导入原问题视频，但波形容器的 `pointer-events: none` 使“生成音频波形”按钮事件穿透到时间轴，用户点击只会移动播放头。0.1.4 保留波形轨道空白区域的 Scrub 穿透，只为按钮设置独立命中和更高层级，并用静态 CSS 回归测试锁定该规则。发布后仍需在真实 Windows 上确认按钮可以点击并进入 `request_prepared`、`request_dispatched` 与 `waveform_started` 阶段。
 
 [GitHub Actions 运行 31719158757](https://github.com/songpy97/spycut/actions/runs/31719158757) 已在 `windows-2022` x64 runner 上完成完整检查、原生 NSIS 构建、静默安装、必需文件核对和静默卸载，并发布 `SpyCut_0.1.4_x64-setup.exe`（75,425,986 bytes，SHA-256 `0b125b9e86cfb2114d0a884605faa9bc7d7e07e3808658621fd877306f4ad832`）。安装包门禁已通过；按钮命中与实际波形生成仍需在用户的真实 Windows 环境复测。
+
+## 0.1.4 真机波形 IPC 闪退诊断与待发布修复
+
+用户提供的完整日志包含两次 0.1.4 手动波形请求：一次为约三小时的 H.265 输入，一次为约 114 秒的 H.264 输入。两次都完成导入、预览和 `request_prepared`、`request_dispatched`，随后进程异常终止；均没有 `waveform_command_entered`（该事件为修复后新增）、`waveform_started`、`waveform_failed`、`waveform_completed`、`rust_panic` 或正常退出记录。下一次启动的 `previous_session_unclean=true` 进一步确认这不是可恢复的 FFmpeg 错误。短 H.264 与长 H.265 的相同结果也排除了视频时长、视频编码族和大波形返回值是主要触发条件。
+
+编译器类型大小检查测得，原实现中的 `extract_audio_waveform` future 为 66,032 字节，`get_audio_waveform` future 为 66,192 字节，Tauri IPC 包装后为 132,392 字节。根因是 64 KiB 固定读取数组跨 `await` 被保存在异步状态机中，release 版 Tauri 又按值包装该 future，具有在 Windows 默认较小线程栈上于命令首条日志执行前溢出的条件。
+
+待发布源码已将 PCM 读取缓冲改为等长堆分配，将提取 future 在 Tauri command 边界显式装箱，并在任何会话读取前同步记录 `waveform_command_entered stage=session_validation`。修改后对应 future 大小降为 520、288 和 584 字节；新增稳定回归测试要求提取 future 不超过 4 KiB。本机聚焦波形测试、显式真实 FFmpeg 短媒体测试、`pnpm check` 和 `cargo xwin check --target x86_64-pc-windows-msvc` 均已通过。
+
+以上结果证明源码已消除已识别的超大 future，但不能写成 Windows 真机闪退已经通过。下一版 Windows 原生安装包仍需在原机器复测长 H.265 与短 H.264：点击后应至少记录 `waveform_command_entered` 和 `waveform_started`，最终记录 `waveform_completed` 或在界面显示可恢复的 `waveform_failed`，且不得产生新的 `previous_session_unclean`。

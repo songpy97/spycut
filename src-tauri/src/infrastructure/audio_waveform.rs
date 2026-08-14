@@ -88,7 +88,7 @@ pub async fn extract_audio_waveform(
     let mut aggregator = PeakAggregator::new(SAMPLES_PER_BUCKET);
 
     let decode = async {
-        let mut buffer = [0_u8; 64 * 1024];
+        let mut buffer = vec![0_u8; 64 * 1024];
         loop {
             let count = stdout.read(&mut buffer).await?;
             if count == 0 {
@@ -222,7 +222,7 @@ fn scale_peak(peak: u16) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::process::Stdio;
+    use std::{mem::size_of_val, process::Stdio};
 
     use tempfile::tempdir;
     use tokio::{process::Command, time::timeout};
@@ -230,6 +230,21 @@ mod tests {
     use crate::infrastructure::tool_locator::{MediaTool, locate_media_tool};
 
     use super::*;
+
+    #[test]
+    fn waveform_extraction_future_stays_small() {
+        let future = extract_audio_waveform(
+            Path::new("ffmpeg"),
+            Path::new("waveform-source.mp4"),
+            1_000_000,
+        );
+
+        assert!(
+            size_of_val(&future) <= 4 * 1024,
+            "waveform extraction future is {} bytes and risks overflowing the Windows IPC thread stack",
+            size_of_val(&future)
+        );
+    }
 
     #[test]
     fn aggregates_pcm_into_twenty_millisecond_peak_buckets() {

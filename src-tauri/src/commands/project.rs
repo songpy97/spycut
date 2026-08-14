@@ -71,6 +71,11 @@ pub async fn get_audio_waveform(
     state: State<'_, ManagedState>,
     diagnostics: State<'_, DiagnosticLog>,
 ) -> Result<AudioWaveform, CommandError> {
+    diagnostics.record(
+        DiagnosticLevel::Info,
+        "waveform_command_entered",
+        "stage=session_validation",
+    );
     let (source, duration_us, has_audio) = {
         let guard = state.session.read().await;
         let session = guard
@@ -100,7 +105,7 @@ pub async fn get_audio_waveform(
         &format!("duration_us={duration_us}"),
     );
     let ffmpeg = locate_media_tool(MediaTool::Ffmpeg).map_err(CommandError::internal)?;
-    let waveform = match extract_audio_waveform(&ffmpeg, &source, duration_us).await {
+    let waveform = match Box::pin(extract_audio_waveform(&ffmpeg, &source, duration_us)).await {
         Ok(waveform) => waveform,
         Err(error) => {
             diagnostics.record(
