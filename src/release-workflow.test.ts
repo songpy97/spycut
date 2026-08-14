@@ -1,5 +1,5 @@
 import {
-  chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync
+  chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -27,6 +27,10 @@ function git(cwd: string, ...args: string[]): string {
 
 function commandPath(command: string): string {
   return execFileSync("bash", ["-lc", `command -v ${command}`], { encoding: "utf8" }).trim();
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
 function createReleaseFixture(packageRunner: "pnpm" | "npm" = "pnpm") {
@@ -64,7 +68,8 @@ function createReleaseFixture(packageRunner: "pnpm" | "npm" = "pnpm") {
   const bin = join(base, "bin");
   mkdirSync(bin);
   for (const command of ["git", "node", "cargo"]) {
-    symlinkSync(commandPath(command), join(bin, command));
+    writeFileSync(join(bin, command), `#!/bin/bash\nexec ${shellQuote(commandPath(command))} "$@"\n`);
+    chmodSync(join(bin, command), 0o755);
   }
   if (packageRunner === "pnpm") {
     writeFileSync(join(bin, "pnpm"), "#!/bin/bash\nexit 0\n");
