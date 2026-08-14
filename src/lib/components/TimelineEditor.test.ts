@@ -227,7 +227,10 @@ describe("TimelineEditor", () => {
     expect(screen.getByRole("button", { name: /删除区间 1，00:00:50\.000 到 00:01:10\.000/ })).toBeInTheDocument();
   });
 
-  it("fits the whole source and supports anchored wheel zoom", async () => {
+  it.each([
+    ["Alt", { altKey: true }],
+    ["Ctrl", { ctrlKey: true }]
+  ])("fits the whole source and supports anchored wheel zoom with %s", async (_modifier, modifier) => {
     const view = render(TimelineEditor, { props });
     const track = view.getByTestId("timeline-track");
     const navigatorWindow = view.getByTestId("navigator-window");
@@ -240,7 +243,13 @@ describe("TimelineEditor", () => {
     const initialLeft = deleteRegion?.style.left;
     const initialWidth = deleteRegion?.style.width;
 
-    const wheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, altKey: true, deltaY: -300, clientX: 600 });
+    const wheel = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      ...modifier,
+      deltaY: -300,
+      clientX: 600
+    });
     track.dispatchEvent(wheel);
     expect(wheel.defaultPrevented).toBe(true);
     await waitFor(() => expect(Number.parseFloat(navigatorWindow.style.width)).toBeLessThan(100));

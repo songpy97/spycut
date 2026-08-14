@@ -730,6 +730,11 @@
       if (!editLocked) void openRecording();
       return;
     }
+    if (event.code === "Space" && currentSession) {
+      event.preventDefault();
+      void togglePlayback();
+      return;
+    }
     if (target?.matches("button, input, textarea, select, [contenteditable=true], [role=slider], [role=scrollbar]")) return;
     if (!currentSession) return;
     if (event.key === "Escape") { if (!editLocked) pendingStartUs = null; reviewOpen = false; return; }
@@ -739,8 +744,7 @@
       return;
     }
     const lower = event.key.toLowerCase();
-    if (event.code === "Space") { event.preventDefault(); void togglePlayback(); }
-    else if (event.key === "ArrowLeft") { event.preventDefault(); void seekTo(playheadUs - (event.metaKey || event.ctrlKey ? 30_000_000 : event.shiftKey ? 5_000_000 : 1_000_000)); }
+    if (event.key === "ArrowLeft") { event.preventDefault(); void seekTo(playheadUs - (event.metaKey || event.ctrlKey ? 30_000_000 : event.shiftKey ? 5_000_000 : 1_000_000)); }
     else if (event.key === "ArrowRight") { event.preventDefault(); void seekTo(playheadUs + (event.metaKey || event.ctrlKey ? 30_000_000 : event.shiftKey ? 5_000_000 : 1_000_000)); }
     else if (!editLocked && (lower === "i" || event.key === "[")) markStart();
     else if (!editLocked && (lower === "o" || event.key === "]")) void markEnd();

@@ -274,7 +274,9 @@ fn build_command(config: &ExportJobConfig) -> Command {
             "-i",
         ])
         .arg(&config.source)
-        .arg("-filter_complex_script")
+        // The deprecated `-filter_complex_script` alias is absent from newer
+        // FFmpeg builds; this is the supported file-backed option syntax.
+        .arg("-/filter_complex")
         .arg(&config.filter_script)
         .args(["-map", "[vout]"]);
     if config.plan.has_audio {
@@ -419,6 +421,74 @@ mod ffmpeg_integration_tests {
     };
 
     use super::*;
+
+    #[test]
+    fn export_command_loads_the_filter_graph_from_a_file_with_the_supported_option() {
+        for codec in [VideoCodec::H264, VideoCodec::Hevc] {
+            let media = MediaInfo {
+                duration_us: 10_000_000,
+                container: "mp4".into(),
+                video_codec: codec,
+                width: 1920,
+                height: 1080,
+                frame_rate: crate::domain::media::FrameRate::new(30, 1).unwrap(),
+                variable_frame_rate: false,
+                video_stream_count: 1,
+                audio_stream_count: 1,
+                pixel_format: Some("yuv420p".into()),
+                bit_depth: Some(8),
+                video_bit_rate: Some(8_000_000),
+                has_audio: true,
+                audio_codec: Some("aac".into()),
+                audio_sample_rate: Some(48_000),
+                audio_channels: Some(2),
+                audio_bit_rate: Some(160_000),
+            };
+            let plan = ExportPlan::build(
+                &media,
+                &[DeleteInterval::new(1, 2_000_000, 3_000_000).unwrap()],
+            )
+            .unwrap();
+            let config = ExportJobConfig {
+                job_id: format!("filter-option-{}", codec.ffmpeg_name()),
+                ffmpeg: PathBuf::from("ffmpeg"),
+                ffprobe: PathBuf::from("ffprobe"),
+                source: PathBuf::from("source.mp4"),
+                destination: PathBuf::from("output.mp4"),
+                partial: PathBuf::from("output.partial.mp4"),
+                filter_script: PathBuf::from("filter graph.txt"),
+                media,
+                plan,
+                encoder: EncoderSelection {
+                    name: "test-encoder".into(),
+                    hardware_accelerated: false,
+                    display_name: "test encoder".into(),
+                },
+                recovery_store: None,
+            };
+
+            let command = build_command(&config);
+            let arguments = command
+                .as_std()
+                .get_args()
+                .map(|argument| argument.to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            let option_index = arguments
+                .iter()
+                .position(|argument| argument == "-/filter_complex")
+                .expect("the export command should use FFmpeg's file-backed option syntax");
+
+            assert_eq!(
+                arguments.get(option_index + 1),
+                Some(&config.filter_script.to_string_lossy().into_owned())
+            );
+            assert!(
+                !arguments
+                    .iter()
+                    .any(|argument| argument == "-filter_complex_script")
+            );
+        }
+    }
 
     #[tokio::test]
     #[ignore = "requires the local FFmpeg toolchain"]

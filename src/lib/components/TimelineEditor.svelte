@@ -374,7 +374,7 @@
     const target = event.target as Node;
     const ruler = editor.querySelector("[data-timeline-ruler]");
     if (!track.contains(target) && !navigator?.contains(target) && !ruler?.contains(target)) return;
-    if (event.altKey) {
+    if (event.altKey || event.ctrlKey) {
       event.preventDefault();
       const rect = track.getBoundingClientRect();
       const anchorRatio = rect.width > 0 ? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) : 0.5;

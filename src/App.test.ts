@@ -189,6 +189,37 @@ describe("App timeline workflow", () => {
     expect(screen.getByRole("button", { name: "完成删除区间" })).toBeDisabled();
   });
 
+  it("reserves Space for playback while the pending-start button has focus", async () => {
+    api.tauri = true;
+    api.getLaunchSource.mockResolvedValue("/tmp/launch.mp4");
+    api.openSource.mockResolvedValue({
+      session: createDemoSession(),
+      resumed: true,
+      previewUrl: "http://127.0.0.1:43123/private-token"
+    });
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    render(App);
+
+    await screen.findByRole("group", { name: "源视频编辑时间轴" });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    await fireEvent.loadedMetadata(video);
+    const start = await screen.findByRole("button", { name: "设删除起点" });
+    await fireEvent.click(start);
+    const resetStart = screen.getByRole("button", { name: "重设删除起点" });
+    resetStart.focus();
+
+    const space = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      code: "Space",
+      key: " "
+    });
+    resetStart.dispatchEvent(space);
+
+    expect(space.defaultPrevented).toBe(true);
+    await waitFor(() => expect(play).toHaveBeenCalledOnce());
+  });
+
   it("keeps a pending start when the backend cannot save the interval", async () => {
     api.tauri = true;
     api.getLaunchSource.mockResolvedValue("/tmp/launch.mp4");
