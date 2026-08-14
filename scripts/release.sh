@@ -84,6 +84,7 @@ release_branch="main"
 release_remote="origin"
 workflow_path=".github/workflows/ci.yml"
 export GIT_TERMINAL_PROMPT=0
+export GIT_PAGER=cat
 version_files=(
   "package.json"
   "src-tauri/tauri.conf.json"
@@ -327,7 +328,7 @@ updated_version="$(read_synchronized_version)"
 [[ "$updated_version" == "$next_version" ]] || die "版本更新后校验失败：$updated_version"
 
 echo "正在运行完整发布检查…"
-"${pnpm_command[@]}" check
+SPYCUT_RELEASE_IN_PROGRESS=1 "${pnpm_command[@]}" check
 git diff --check
 
 echo

@@ -48,7 +48,9 @@ Prompt for major/minor/patch, calculate the next version, reject existing tags, 
 
 **Step 4: Verify and publish**
 
-Run `pnpm check` and `git diff --check`; show the final status/stat; require a second explicit confirmation; stage all reviewed changes, commit `release: vX.Y.Z`, create `git tag -a`, and atomically push branch and tag.
+Run `pnpm check` with `SPYCUT_RELEASE_IN_PROGRESS=1` so only the nested commit/tag/push integration simulation is skipped, then run `git diff --check`; show the final status/stat; require a second explicit confirmation; stage all reviewed changes, commit `release: vX.Y.Z`, create `git tag -a`, and atomically push branch and tag.
+
+Set `GIT_PAGER=cat` for the complete script so no Git check or summary can open an interactive pager before the final confirmation.
 
 **Step 5: Handle cancellation and retry**
 

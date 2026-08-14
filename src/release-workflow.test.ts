@@ -110,9 +110,12 @@ describe("interactive release workflow", () => {
     expect(script).toContain("pnpm check");
     expect(script).toContain("npm exec --yes --package=pnpm@11.16.0 -- pnpm");
     expect(script).toContain('"${pnpm_command[@]}" check');
+    expect(script).toContain("SPYCUT_RELEASE_IN_PROGRESS=1");
+    expect(script).toContain("GIT_PAGER=cat");
     expect(script).toContain("git diff --check");
     expect(script).toContain("git tag -a");
     expect(script).toContain("git push --atomic");
+    expect(script).toContain("发布已触发：$release_tag");
     expect(script).toContain("GIT_TERMINAL_PROMPT=0");
     expect(script).toContain("git add -A");
     expect(script).toContain("mktemp -d");
@@ -147,20 +150,23 @@ describe("interactive release workflow", () => {
     }
   }, 30_000);
 
-  it("commits, tags and atomically pushes a confirmed patch release", () => {
-    const fixture = createReleaseFixture();
-    try {
-      const result = runFixtureRelease(fixture.repo, fixture.bin, "3\ny\ny\n");
+  it.skipIf(process.env.SPYCUT_RELEASE_IN_PROGRESS === "1")(
+    "commits, tags and atomically pushes a confirmed patch release",
+    () => {
+      const fixture = createReleaseFixture();
+      try {
+        const result = runFixtureRelease(fixture.repo, fixture.bin, "3\ny\ny\n");
 
-      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
-      expect(result.stdout).toContain("发布已触发：v1.0.1");
-      expect(JSON.parse(readFileSync(join(fixture.repo, "package.json"), "utf8")).version).toBe("1.0.1");
-      expect(git(fixture.repo, "log", "-1", "--format=%s")).toBe("release: v1.0.1");
-      expect(git(fixture.repo, "status", "--porcelain")).toBe("");
-      expect(git(fixture.repo, "rev-parse", "HEAD")).toBe(git(fixture.repo, "rev-parse", "v1.0.1^{commit}"));
-      expect(git(fixture.repo, "rev-parse", "HEAD")).toBe(git(fixture.remote, "rev-parse", "refs/tags/v1.0.1^{commit}"));
-    } finally {
-      rmSync(fixture.base, { recursive: true, force: true });
-    }
-  }, 30_000);
+        expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+        expect(JSON.parse(readFileSync(join(fixture.repo, "package.json"), "utf8")).version).toBe("1.0.1");
+        expect(git(fixture.repo, "log", "-1", "--format=%s")).toBe("release: v1.0.1");
+        expect(git(fixture.repo, "status", "--porcelain")).toBe("");
+        expect(git(fixture.repo, "rev-parse", "HEAD")).toBe(git(fixture.repo, "rev-parse", "v1.0.1^{commit}"));
+        expect(git(fixture.repo, "rev-parse", "HEAD")).toBe(git(fixture.remote, "rev-parse", "refs/tags/v1.0.1^{commit}"));
+      } finally {
+        rmSync(fixture.base, { recursive: true, force: true });
+      }
+    },
+    30_000
+  );
 });

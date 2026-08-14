@@ -231,7 +231,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 macOS 打包验收必须确认 `.app` 的 `Info.plist` 声明 `icon.icns`，且同名资源实际存在于应用包中。
 
 GitHub Actions 在推送 `v*` 标签时于 `macos-15` ARM64、`macos-15-intel` x64 和 `windows-2022` x64 runner 并行生成包；只有三个原生目标都成功，才允许自动创建包含安装包和校验文件的预发布 GitHub Release。手动 `workflow_dispatch` 只上传 Actions 产物，不创建 Release。
-交互式发布脚本会把运行时工作区的全部改动纳入 release commit；确认发布前必须复核其 `git status` 和 diff 摘要。检查失败或最终确认前取消时脚本应恢复四个版本文件，开始提交后不得自动重写 Git 历史；原子 push 失败时保留本地 release commit 和标签供后续续推，禁止 force push 或复用已发布标签。
+交互式发布脚本会把运行时工作区的全部改动纳入 release commit；确认发布前必须复核其 `git status` 和 diff 摘要。脚本内必须禁用 Git 分页器，检查输出不得停在 `less` 的 `END` 而阻断最终确认。发布脚本内部的 `pnpm check` 只跳过会再次执行 commit/tag/push 的嵌套发布模拟，该模拟在普通测试和 CI 中仍必须运行。检查失败或最终确认前取消时脚本应恢复四个版本文件，开始提交后不得自动重写 Git 历史；原子 push 失败时保留本地 release commit 和标签供后续续推，禁止 force push 或复用已发布标签。
 每个平台的校验文件必须从本次构建的 bundle 目录上传，禁止用宽泛 glob 混入 `docs/release/` 中的历史版本校验文件。
 
 所有构建、测试、FFmpeg 和容器命令必须使用有限超时或非交互批处理模式。工具返回 session id 时必须持续轮询到退出，或明确终止会话；不能在命令已经结束后仍让任务停在 Working 状态。
