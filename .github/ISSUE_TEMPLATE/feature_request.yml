@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a focused improvement for long-recording cleanup
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        SpyCut intentionally keeps the source timeline immutable and stores only delete intervals. Explain the workflow problem first so the smallest compatible solution can be considered.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Workflow problem
+      description: What are you trying to do with a long recording, and where does the current workflow become difficult?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: Describe the smallest change that would solve the problem.
+    validations:
+      required: true
+  - type: dropdown
+    id: use_case
+    attributes:
+      label: Primary use case
+      options:
+        - Online course or tutorial
+        - Webinar or corporate training
+        - Product demo or screencast
+        - Coding stream or lecture archive
+        - Meeting or community session
+        - Professional post-production
+        - Development or maintenance workflow
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: How do you handle this today?
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Product fit
+      options:
+        - label: This request can preserve the read-only source and immutable original timeline.
+          required: true
+        - label: This request can keep delete intervals as the project source of truth.
+          required: true
