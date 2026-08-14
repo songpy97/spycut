@@ -8,9 +8,13 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 const scriptPath = resolve(root, "scripts/release.sh");
+const bashPath =
+  process.platform === "win32"
+    ? execFileSync("where.exe", ["bash"], { encoding: "utf8" }).split(/\r?\n/).find(Boolean)!
+    : execFileSync("bash", ["-lc", "command -v bash"], { encoding: "utf8" }).trim();
 
 function runScript(...args: string[]) {
-  return spawnSync("bash", [scriptPath, ...args], {
+  return spawnSync(bashPath, [scriptPath, ...args], {
     cwd: root,
     encoding: "utf8",
     timeout: 5_000
@@ -76,7 +80,7 @@ function createReleaseFixture(packageRunner: "pnpm" | "npm" = "pnpm") {
 }
 
 function runFixtureRelease(repo: string, bin: string, input: string) {
-  return spawnSync("bash", [join(repo, "scripts/release.sh")], {
+  return spawnSync(bashPath, [join(repo, "scripts/release.sh")], {
     cwd: repo,
     encoding: "utf8",
     input,
@@ -129,7 +133,7 @@ describe("interactive release workflow", () => {
   });
 
   it("has valid Bash syntax and documents the interactive entry point", () => {
-    expect(spawnSync("bash", ["-n", scriptPath], { cwd: root }).status).toBe(0);
+    expect(spawnSync(bashPath, ["-n", scriptPath], { cwd: root }).status).toBe(0);
     expect(runScript("--help").stdout).toContain("major");
     expect(runScript("--help").stdout).toContain("minor");
     expect(runScript("--help").stdout).toContain("patch");
