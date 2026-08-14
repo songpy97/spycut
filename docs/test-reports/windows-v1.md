@@ -86,3 +86,9 @@
 待发布源码已将 PCM 读取缓冲改为等长堆分配，将提取 future 在 Tauri command 边界显式装箱，并在任何会话读取前同步记录 `waveform_command_entered stage=session_validation`。修改后对应 future 大小降为 520、288 和 584 字节；新增稳定回归测试要求提取 future 不超过 4 KiB。本机聚焦波形测试、显式真实 FFmpeg 短媒体测试、`pnpm check` 和 `cargo xwin check --target x86_64-pc-windows-msvc` 均已通过。
 
 以上结果证明源码已消除已识别的超大 future，但不能写成 Windows 真机闪退已经通过。下一版 Windows 原生安装包仍需在原机器复测长 H.265 与短 H.264：点击后应至少记录 `waveform_command_entered` 和 `waveform_started`，最终记录 `waveform_completed` 或在界面显示可恢复的 `waveform_failed`，且不得产生新的 `previous_session_unclean`。
+
+## 0.1.5 Windows 原生发布结果
+
+[GitHub Actions 运行 31760281256](https://github.com/songpy97/spycut/actions/runs/31760281256) 已在 `windows-2022` x64 runner 上完成完整检查、原生 NSIS 构建、静默安装、必需文件核对和静默卸载，并发布 `SpyCut_0.1.5_x64-setup.exe`（75,439,659 bytes，SHA-256 `96a1ae9f936f091090817cef3f51f777000885d84b80fa763e6c2eeae5fe5944`）。macOS 与 Windows 原生产物全部成功后，流水线已创建 [SpyCut v0.1.5 预发布版](https://github.com/songpy97/spycut/releases/tag/v0.1.5)。
+
+该结果证明安装包完整性、安装内容和卸载路径通过自动门禁，并包含缩小后的波形 future；它仍不替代原问题机器上的真实 H.264/H.265 波形生成复测。
