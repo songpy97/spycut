@@ -92,3 +92,9 @@
 [GitHub Actions 运行 31760281256](https://github.com/songpy97/spycut/actions/runs/31760281256) 已在 `windows-2022` x64 runner 上完成完整检查、原生 NSIS 构建、静默安装、必需文件核对和静默卸载，并发布 `SpyCut_0.1.5_x64-setup.exe`（75,439,659 bytes，SHA-256 `96a1ae9f936f091090817cef3f51f777000885d84b80fa763e6c2eeae5fe5944`）。macOS 与 Windows 原生产物全部成功后，流水线已创建 [SpyCut v0.1.5 预发布版](https://github.com/songpy97/spycut/releases/tag/v0.1.5)。
 
 该结果证明安装包完整性、安装内容和卸载路径通过自动门禁，并包含缩小后的波形 future；它仍不替代原问题机器上的真实 H.264/H.265 波形生成复测。
+
+## 1.0.0 Windows 原生发布结果
+
+[GitHub Actions 运行 31767813489](https://github.com/songpy97/spycut/actions/runs/31767813489) 已在 `windows-2022` x64 runner 上完成完整检查、原生 NSIS 构建、静默安装、必需文件核对、静默卸载和 Actions 产物上传，并发布 `SpyCut_1.0.0_x64-setup.exe`（75,423,061 bytes，SHA-256 `079c4258823eb581ebb43dd04b7e4c1033c44e7f0888e9af1556480649d8a72f`）。macOS 与 Windows 原生产物全部成功后，流水线已创建 [SpyCut v1.0.0 预发布版](https://github.com/songpy97/spycut/releases/tag/v1.0.0)；发布后重新下载安装包并使用相邻 `.sha256` 复核通过。
+
+该安装包包含当前 FFmpeg 文件式 filter graph 参数修复、波形栈溢出修复和时间轴键盘/滚轮交互。自动门禁证明安装器完整性、预期安装内容和卸载路径通过；它仍不替代真实 Windows 10/11 + WebView2 上的 H.264/H.265 预览、波形、导出和专业剪辑软件导入验收。

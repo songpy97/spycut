@@ -1,5 +1,7 @@
 # SpyCut V1 macOS 验收记录
 
+> 2026-08-14 1.0.0 发布补充：[GitHub Actions 运行 31767813489](https://github.com/songpy97/spycut/actions/runs/31767813489) 已在 `macos-15` ARM64 runner 上完成完整检查、原生 DMG/ZIP 打包、架构与包结构验收并上传产物。发布产物为 `SpyCut_1.0.0_aarch64.dmg`（26,151,189 bytes，SHA-256 `6cba2ec2a1fb4979c768e04bb226b7027daf9c8367ec61f0b3ee94b2f26c7ce9`）及 `SpyCut_1.0.0_aarch64.zip`（23,706,294 bytes，SHA-256 `9dc5db7c83b5fb275b437e11cb7668522433c918c11816f0c8970c7000b2f29b`）。macOS 与 Windows 原生产物全部成功后，流水线已创建 [SpyCut v1.0.0 预发布版](https://github.com/songpy97/spycut/releases/tag/v1.0.0)；发布后重新下载的两个产物均通过随包校验文件。本次自动结果不替代新的人工界面或真实课程媒体回归。
+
 > 2026-08-14 0.1.5 发布补充：[GitHub Actions 运行 31760281256](https://github.com/songpy97/spycut/actions/runs/31760281256) 已在 `macos-15` ARM64 runner 上完成完整检查和原生打包。发布产物为 `SpyCut_0.1.5_aarch64.dmg`（26,151,049 bytes，SHA-256 `6085966dc6af83ecb4ee5dbc206e5ce321e1bd0ecac56fe915d9b319ccbe6c62`）及 `SpyCut_0.1.5_aarch64.zip`（23,706,515 bytes，SHA-256 `986c6b778391ce8a80c5f95b03c5a2f270a0989d3f7e9108e0ff8ad1d999ce86`）。本次将波形解码 future 的固定缓冲改为堆分配并在 Tauri 命令边界装箱，不改变 macOS 自动生成波形的产品行为。
 
 > 2026-08-14 0.1.4 发布补充：[GitHub Actions 运行 31719158757](https://github.com/songpy97/spycut/actions/runs/31719158757) 已在 `macos-15` ARM64 runner 上完成完整检查和原生打包。发布产物为 `SpyCut_0.1.4_aarch64.dmg`（26,153,184 bytes，SHA-256 `8b5d8577fa2c47523c0fc152035db4901df6197200a7256f07030d970ab4a63a`）及 `SpyCut_0.1.4_aarch64.zip`（23,708,322 bytes，SHA-256 `0dc1ad3e2b89794c1069f1afdfa4195e5e8f51ad394e42a06370bfedd40d9cc6`）。本次仅修复手动波形按钮的点击命中，不改变 macOS 自动生成波形的行为。
