@@ -35,4 +35,17 @@ describe("release packaging policy", () => {
     expect(windowsScript).toContain("WaitForExit($TimeoutSeconds * 1000)");
     expect(windowsScript).toContain("Remove-Item $installer.FullName, $checksumPath");
   });
+
+  it("packages both macOS architectures on native runners", () => {
+    const workflow = read(".github/workflows/ci.yml");
+    const macScript = read("scripts/package-macos.sh");
+
+    expect(workflow).toContain("os: macos-15\n");
+    expect(workflow).toContain("artifact: SpyCut-macOS-arm64");
+    expect(workflow).toContain("os: macos-15-intel");
+    expect(workflow).toContain("artifact: SpyCut-macOS-x64");
+    expect(macScript).toContain("aarch64-apple-darwin");
+    expect(macScript).toContain("x86_64-apple-darwin");
+    expect(macScript).toContain('SpyCut_${app_version}_${mac_arch}_checksums.txt');
+  });
 });

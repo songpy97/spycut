@@ -6,7 +6,7 @@ const adapterMocks = vi.hoisted(() => ({
   dispose: vi.fn(),
   setRate: vi.fn(),
   previewSeekTo: vi.fn(),
-  seekTo: vi.fn(async () => {}),
+  seekTo: vi.fn(async () => true),
   play: vi.fn(async () => {}),
   pause: vi.fn()
 }));
@@ -48,5 +48,22 @@ describe("PlayerPane preview seeking", () => {
     callbacks[0](16);
     expect(adapterMocks.previewSeekTo).toHaveBeenCalledOnce();
     expect(adapterMocks.previewSeekTo).toHaveBeenCalledWith(3);
+  });
+
+  it("dispatches time only when the active exact seek completes", async () => {
+    const times = vi.fn();
+    const { component } = render(PlayerPane, {
+      props: { sourceUrl: "http://localhost/media/test", demo: false },
+      events: { time: times }
+    });
+    await waitFor(() => expect(adapterMocks.load).toHaveBeenCalledOnce());
+    adapterMocks.seekTo.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    await expect(component.seekTo(4_000_000)).resolves.toBe(false);
+    expect(times).not.toHaveBeenCalled();
+
+    await expect(component.seekTo(8_000_000)).resolves.toBe(true);
+    expect(times).toHaveBeenCalledOnce();
+    expect(times.mock.calls[0][0].detail).toEqual({ playheadUs: 8_000_000 });
   });
 });

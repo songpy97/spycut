@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Build and verify internal Apple Silicon macOS packages from this checkout.
+# Build and verify native macOS packages from this checkout.
 set -Eeuo pipefail
 
 export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:${PATH}"
 
 readonly script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 readonly repo_root="$(CDPATH= cd -- "$script_dir/.." && pwd)"
-readonly mac_target='aarch64-apple-darwin'
 readonly app_version="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["version"])' "$repo_root/src-tauri/tauri.conf.json")"
-readonly mac_app="$repo_root/src-tauri/target/release/bundle/macos/SpyCut.app"
-readonly mac_dmg="$repo_root/src-tauri/target/release/bundle/dmg/SpyCut_${app_version}_aarch64.dmg"
-readonly mac_zip="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_${app_version}_aarch64.zip"
-readonly checksums_file="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_${app_version}_checksums.txt"
+mac_target=''
+mac_arch=''
+mac_app=''
+mac_dmg=''
+mac_zip=''
+checksums_file=''
 pnpm_command=()
 
 log() { printf '%s\n' "[package-macos] $*"; }
@@ -39,9 +40,23 @@ main() {
   local stage_dir=''
   local verify_dir=''
   [[ "$(uname -s)" == 'Darwin' ]] || die 'this script must run on macOS'
-  [[ "$(uname -m)" == 'arm64' ]] || die 'this script currently produces Apple Silicon packages only'
+  case "$(uname -m)" in
+    arm64)
+      mac_target='aarch64-apple-darwin'
+      mac_arch='aarch64'
+      ;;
+    x86_64)
+      mac_target='x86_64-apple-darwin'
+      mac_arch='x64'
+      ;;
+    *) die 'unsupported macOS architecture' ;;
+  esac
+  mac_app="$repo_root/src-tauri/target/release/bundle/macos/SpyCut.app"
+  mac_dmg="$repo_root/src-tauri/target/release/bundle/dmg/SpyCut_${app_version}_${mac_arch}.dmg"
+  mac_zip="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_${app_version}_${mac_arch}.zip"
+  checksums_file="$repo_root/src-tauri/target/release/bundle/macos/SpyCut_${app_version}_${mac_arch}_checksums.txt"
   cd "$repo_root"
-  for command in python3 npm codesign ditto hdiutil unzip shasum; do require_command "$command"; done
+  for command in python3 npm codesign ditto hdiutil plutil unzip shasum; do require_command "$command"; done
   resolve_pnpm
 
   if [[ ! -x "$repo_root/src-tauri/binaries/ffmpeg-$mac_target" || ! -x "$repo_root/src-tauri/binaries/ffprobe-$mac_target" ]]; then
@@ -54,6 +69,8 @@ main() {
   log 'Building the macOS application bundle.'
   run_with_timeout 1800 "${pnpm_command[@]}" tauri build --config src-tauri/tauri.release.conf.json --bundles app
   [[ -d "$mac_app" ]] || die 'macOS application bundle was not created'
+  [[ "$(plutil -extract CFBundleIconFile raw "$mac_app/Contents/Info.plist")" == 'icon.icns' ]] || die 'macOS application bundle does not declare icon.icns'
+  [[ -f "$mac_app/Contents/Resources/icon.icns" ]] || die 'macOS application bundle is missing icon.icns'
 
   codesign --force --sign - "$mac_app/Contents/MacOS/ffmpeg"
   codesign --force --sign - "$mac_app/Contents/MacOS/ffprobe"
@@ -92,7 +109,7 @@ main() {
   ) > "$checksums_file"
   git diff --check
   trap - EXIT
-  log 'macOS packages created. Build the Windows installer on Windows or through the package workflow.'
+  log "macOS ${mac_arch} packages created. Build the Windows installer on Windows or through the package workflow."
   printf '%s\n' "  $mac_dmg" "  $mac_zip" "  $checksums_file"
 }
 

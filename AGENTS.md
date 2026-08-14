@@ -76,6 +76,7 @@ Svelte UI → Tauri commands → application/domain
 - `App.svelte` 当前是前端工作流协调者；可复用的视图和播放器行为应下沉到 `lib/`，不要继续把纯逻辑堆入页面。
 - 主界面只使用 `TimelineEditor.svelte` 作为唯一编辑时间轴；音频波形、删除区间轨道和细导航条共享同一个视口与播放头，不得重新引入第二套刻度或播放头。
 - 连续 Scrub 由 `PlayerPane.svelte` 合并预览 Seek，手势完成后才执行精确 Seek；区间边界调整只在松手时提交一次命令。
+- 播放、暂停和定位命令必须按最新用户意图收敛：主动暂停造成的过期 `play()` 取消不是用户可见错误，新的预览或精确 Seek 必须使旧精确 Seek 安静失效；拖动提交/取消的定位失败或被取代后不得自动恢复播放。
 - 普通预览从保留内容进入删除区间时必须自动跳到区间终点；明确手动定位落入删除区间时只放行当前区间，离开后恢复自动跳过。连接点复核的专用跳转优先于普通预览跳过。
 - 正常启动必须显示空白首页，不得依据应用数据最近项目缓存自动打开视频；只有用户手动选择、文件关联或启动参数明确指定源视频时才能打开，且仍按指纹优先恢复视频同目录 sidecar。
 - Rust 使用 `snake_case` 字段并通过 serde 输出 `camelCase` 时，必须同步更新 `src/lib/types/contracts.ts` 和 `src/lib/api/tauri.ts`。
@@ -219,15 +220,18 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 
 发布前按目标平台使用：
 
+- `scripts/release.sh`（首选交互式版本发布入口；选择 major/minor/patch，同步版本并完成检查后原子推送 `main` 与 `v*` 标签；无全局 pnpm 时通过 Corepack 或 npm 使用固定版本）
 - `scripts/prepare-ffmpeg-macos.sh`
 - `scripts/prepare-ffmpeg-windows.ps1`
-- `scripts/package-macos.sh`（Apple Silicon macOS 上生成并验收 DMG/ZIP）
+- `scripts/package-macos.sh`（Apple Silicon 或 Intel macOS 上原生生成并验收对应架构的 DMG/ZIP）
 - `scripts/package-windows.ps1`（Windows 原生生成 NSIS；干净 Windows/CI 上必须带 `-SmokeTest` 完成静默安装与卸载验收）
 - `src-tauri/tauri.release.conf.json`
 
 实际命令、签名状态、交叉构建限制和产物校验以 `README.md`、`docs/test-reports/` 与 `docs/release/` 为准。可发布 Windows 安装器必须在 Windows 原生生成并通过安装/卸载冒烟验收；macOS/Linux 交叉编译只可用于编译检查，不能替代 Windows 打包。安装器冒烟通过也不能替代真实 Windows 10/11 + WebView2 媒体验收。
+macOS 打包验收必须确认 `.app` 的 `Info.plist` 声明 `icon.icns`，且同名资源实际存在于应用包中。
 
-GitHub Actions 在推送 `v*` 标签时于 `macos-15` ARM64 和 `windows-2022` x64 runner 并行生成包；只有两个原生目标都成功，才允许自动创建包含安装包和校验文件的预发布 GitHub Release。手动 `workflow_dispatch` 只上传 Actions 产物，不创建 Release。
+GitHub Actions 在推送 `v*` 标签时于 `macos-15` ARM64、`macos-15-intel` x64 和 `windows-2022` x64 runner 并行生成包；只有三个原生目标都成功，才允许自动创建包含安装包和校验文件的预发布 GitHub Release。手动 `workflow_dispatch` 只上传 Actions 产物，不创建 Release。
+交互式发布脚本会把运行时工作区的全部改动纳入 release commit；确认发布前必须复核其 `git status` 和 diff 摘要。检查失败或最终确认前取消时脚本应恢复四个版本文件，开始提交后不得自动重写 Git 历史；原子 push 失败时保留本地 release commit 和标签供后续续推，禁止 force push 或复用已发布标签。
 每个平台的校验文件必须从本次构建的 bundle 目录上传，禁止用宽泛 glob 混入 `docs/release/` 中的历史版本校验文件。
 
 所有构建、测试、FFmpeg 和容器命令必须使用有限超时或非交互批处理模式。工具返回 session id 时必须持续轮询到退出，或明确终止会话；不能在命令已经结束后仍让任务停在 Working 状态。

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDemoSession } from "./lib/types/contracts";
 
 const api = vi.hoisted(() => ({
@@ -69,6 +69,11 @@ describe("App timeline workflow", () => {
     api.recordFrontendDiagnostic.mockResolvedValue(undefined);
     api.revealDiagnosticLog.mockReset();
     api.revealDiagnosticLog.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("starts with an empty workspace instead of restoring the recent-project cache", async () => {
@@ -218,6 +223,33 @@ describe("App timeline workflow", () => {
 
     expect(space.defaultPrevented).toBe(true);
     await waitFor(() => expect(play).toHaveBeenCalledOnce());
+  });
+
+  it("does not resume playback after a scrub seek times out", async () => {
+    api.tauri = true;
+    api.getLaunchSource.mockResolvedValue("/tmp/launch.mp4");
+    api.openSource.mockResolvedValue({
+      session: createDemoSession(),
+      resumed: true,
+      previewUrl: "http://127.0.0.1:43123/private-token"
+    });
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    render(App);
+
+    await screen.findByRole("group", { name: "源视频编辑时间轴" });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    await fireEvent.loadedMetadata(video);
+    Object.defineProperty(video, "seeking", { configurable: true, value: true });
+    await fireEvent.play(video);
+    vi.useFakeTimers();
+
+    await fireEvent.keyDown(screen.getByRole("slider", { name: "当前播放位置" }), { key: "ArrowRight" });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await Promise.resolve();
+
+    expect(screen.getByText("视频定位超时")).toBeInTheDocument();
+    expect(play).not.toHaveBeenCalled();
   });
 
   it("keeps a pending start when the backend cannot save the interval", async () => {

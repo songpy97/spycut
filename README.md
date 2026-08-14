@@ -100,9 +100,10 @@ Download the latest preview from [GitHub Releases](https://github.com/songpy97/s
 | Platform | Package | Status |
 | --- | --- | --- |
 | macOS 12+ on Apple Silicon | DMG or portable ZIP | Native preview build; locally signed, not notarized |
+| macOS 12+ on Intel x64 | DMG or portable ZIP | Native preview build; locally signed, not notarized |
 | Windows 10/11 x64 | NSIS installer | Native CI build with install/uninstall smoke test; unsigned |
 
-Release bundles include supervised FFmpeg/FFprobe sidecars, so users do not need to install FFmpeg separately. macOS checksums are published in `SpyCut_*_checksums.txt`; Windows installers include an adjacent `.sha256` file.
+Release bundles include supervised FFmpeg/FFprobe sidecars, so users do not need to install FFmpeg separately. macOS checksums are published in architecture-specific `SpyCut_*_checksums.txt` files; Windows installers include an adjacent `.sha256` file.
 
 ### V1 media scope
 
@@ -171,7 +172,7 @@ pnpm tauri:dev
 Platform packaging:
 
 ```sh
-# Apple Silicon macOS: build and verify DMG + ZIP
+# Native Apple Silicon or Intel macOS: build and verify DMG + ZIP
 bash scripts/package-macos.sh
 ```
 
@@ -180,6 +181,14 @@ bash scripts/package-macos.sh
 ./scripts/package-windows.ps1 -SmokeTest
 ```
 
+Interactive version release:
+
+```sh
+bash scripts/release.sh
+```
+
+The script prompts for a major, minor, or patch increment, synchronizes the package, Tauri, Cargo, and lockfile versions, runs `pnpm check`, then asks for final confirmation before including every current worktree change in a release commit. If global `pnpm` is unavailable, it uses Corepack or falls back to downloading the repository-pinned `pnpm@11.16.0` temporarily through `npm` (the first npm fallback requires network access). It creates an annotated `v*` tag and atomically pushes `main` plus the tag. That tag triggers native ARM64 macOS, Intel macOS, and Windows packaging; all three must pass before the workflow creates a prerelease. A manual `workflow_dispatch` uploads artifacts but does not create a GitHub Release.
+
 See [AGENTS.md](AGENTS.md) for product invariants, architecture boundaries, and the verification matrix. Detailed V1 architecture and acceptance records currently live in the Chinese [development document](docs/SpyCut-V1-开发文档.md) and [acceptance report](docs/SpyCut-V1-验收报告.md).
 
 ## Roadmap
@@ -187,7 +196,7 @@ See [AGENTS.md](AGENTS.md) for product invariants, architecture boundaries, and 
 - [x] Immutable delete-only timeline with undo/redo
 - [x] Speech waveform and long-recording navigation
 - [x] Join review and transactional, validated export
-- [x] Native Apple Silicon macOS and Windows x64 preview builds
+- [x] Native Apple Silicon macOS, Intel macOS, and Windows x64 preview builds
 - [ ] English application UI and a maintainable localization layer
 - [ ] Signed and notarized public releases
 - [ ] Broader real-device media compatibility testing

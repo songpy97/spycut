@@ -421,8 +421,8 @@
     playbackSeekTokens.add(seekToken);
     let currentSeek = false;
     try {
-      await player?.seekTo(targetUs);
-      currentSeek = seekToken === playbackSeekSequence && project?.projectId === targetProjectId;
+      const completed = await player?.seekTo(targetUs) ?? false;
+      currentSeek = completed && seekToken === playbackSeekSequence && project?.projectId === targetProjectId;
       if (currentSeek) {
         if (intent === "manual") deletionPlaybackGuard.setManualPosition(targetUs, intervals);
         else deletionPlaybackGuard.setAutomaticPosition(targetUs);
@@ -566,10 +566,12 @@
   async function commitScrub(nextUs: number) {
     if (!media) return;
     const finalUs = clampTime(nextUs, media.durationUs);
+    let seekCompleted = false;
     try {
       playheadUs = finalUs;
       deletionPlaybackGuard.setManualPosition(finalUs, intervals);
-      await player?.seekTo(finalUs);
+      seekCompleted = await player?.seekTo(finalUs) ?? false;
+      if (!seekCompleted) return;
       deletionPlaybackGuard.setManualPosition(finalUs, intervals);
       schedulePlayheadSave(finalUs);
     } catch (error) {
@@ -578,7 +580,7 @@
       scrubbing = false;
       const shouldResume = resumeAfterScrub;
       resumeAfterScrub = false;
-      if (shouldResume) {
+      if (shouldResume && seekCompleted) {
         try { await player?.play(); }
         catch (error) { errorMessage = commandMessage(error); }
       }
@@ -588,10 +590,12 @@
   async function cancelScrub() {
     if (!scrubbing) return;
     const originUs = scrubOriginUs;
+    let seekCompleted = false;
     try {
       playheadUs = originUs;
       deletionPlaybackGuard.setManualPosition(originUs, intervals);
-      await player?.seekTo(originUs);
+      seekCompleted = await player?.seekTo(originUs) ?? false;
+      if (!seekCompleted) return;
       deletionPlaybackGuard.setManualPosition(originUs, intervals);
     } catch (error) {
       errorMessage = commandMessage(error);
@@ -599,7 +603,7 @@
       scrubbing = false;
       const shouldResume = resumeAfterScrub;
       resumeAfterScrub = false;
-      if (shouldResume) {
+      if (shouldResume && seekCompleted) {
         try { await player?.play(); }
         catch (error) { errorMessage = commandMessage(error); }
       }

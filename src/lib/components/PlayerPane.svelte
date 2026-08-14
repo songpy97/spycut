@@ -70,14 +70,18 @@
     if (!demo) await adapter?.play();
   }
 
-  export async function seekTo(playheadUs: number) {
+  export async function seekTo(playheadUs: number): Promise<boolean> {
     cancelPreviewSeek();
     if (demo) {
       dispatch("time", { playheadUs });
-      return;
+      return true;
     }
-    await adapter?.seekTo(playheadUs / 1_000_000);
+    const activeAdapter = adapter;
+    if (!activeAdapter) return false;
+    const completed = await activeAdapter.seekTo(playheadUs / 1_000_000);
+    if (!completed || adapter !== activeAdapter) return false;
     dispatch("time", { playheadUs });
+    return true;
   }
 
   export function previewSeekTo(playheadUs: number) {

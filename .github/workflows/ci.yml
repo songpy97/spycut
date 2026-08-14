@@ -46,6 +46,12 @@ jobs:
               src-tauri/target/release/bundle/dmg/*.dmg
               src-tauri/target/release/bundle/macos/*.zip
               src-tauri/target/release/bundle/macos/*_checksums.txt
+          - os: macos-15-intel
+            artifact: SpyCut-macOS-x64
+            paths: |
+              src-tauri/target/release/bundle/dmg/*.dmg
+              src-tauri/target/release/bundle/macos/*.zip
+              src-tauri/target/release/bundle/macos/*_checksums.txt
           - os: windows-2022
             artifact: SpyCut-Windows-x64
             paths: |

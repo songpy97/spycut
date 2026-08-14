@@ -1,9 +1,17 @@
 import type { MediaPlayerAdapter } from "./MediaPlayerAdapter";
 
+const SEEK_TIMEOUT_MS = 10_000;
+const SEEK_TOLERANCE_SECONDS = 0.0005;
+
 export class HtmlVideoAdapter implements MediaPlayerAdapter {
+  private playbackSequence = 0;
+  private pendingSeekSupersede: (() => void) | null = null;
+
   constructor(private readonly video: HTMLVideoElement) {}
 
   async load(sourceUrl: string): Promise<void> {
+    this.invalidatePlayback();
+    this.supersedePendingSeek();
     this.video.src = sourceUrl;
     this.video.load();
     await new Promise<void>((resolve, reject) => {
@@ -27,45 +35,70 @@ export class HtmlVideoAdapter implements MediaPlayerAdapter {
     });
   }
 
-  play(): Promise<void> {
-    return this.video.play();
+  async play(): Promise<void> {
+    const playbackSequence = ++this.playbackSequence;
+    try {
+      await this.video.play();
+    } catch (error) {
+      if (playbackSequence !== this.playbackSequence && isExpectedPlayInterruption(error)) return;
+      throw error;
+    }
   }
 
   pause(): void {
+    this.invalidatePlayback();
     this.video.pause();
   }
 
   previewSeekTo(seconds: number): void {
     if (!Number.isFinite(seconds)) return;
-    this.video.currentTime = Math.max(0, seconds);
+    this.supersedePendingSeek();
+    this.video.currentTime = this.clampTarget(seconds);
   }
 
-  async seekTo(seconds: number): Promise<void> {
-    const target = Math.max(0, seconds);
-    if (!Number.isFinite(target)) throw new Error("无效的预览时间");
-    if (Math.abs(this.video.currentTime - target) <= 0.0005) return;
+  async seekTo(seconds: number): Promise<boolean> {
+    if (!Number.isFinite(seconds)) throw new Error("无效的预览时间");
+    const target = this.clampTarget(seconds);
+    this.supersedePendingSeek();
+    if (!this.video.seeking && this.isAtTarget(target)) return true;
 
-    await new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => finish(new Error("视频定位超时")), 5_000);
-      const seeked = () => finish();
-      const failed = () => finish(new Error("视频定位失败"));
+    return new Promise<boolean>((resolve, reject) => {
+      let settled = false;
+      let timer = 0;
+      const supersede = () => finish(false);
+      const seeked = () => {
+        if (!this.video.seeking && this.isAtTarget(target)) finish(true);
+      };
+      const failed = () => finish(false, new Error("视频定位失败"));
       const cleanup = () => {
         window.clearTimeout(timer);
         this.video.removeEventListener("seeked", seeked);
         this.video.removeEventListener("error", failed);
+        if (this.pendingSeekSupersede === supersede) this.pendingSeekSupersede = null;
       };
-      const finish = (error?: Error) => {
+      const finish = (completed: boolean, error?: Error) => {
+        if (settled) return;
+        settled = true;
         cleanup();
-        if (error) reject(error); else resolve();
+        if (error) reject(error); else resolve(completed);
       };
 
-      this.video.addEventListener("seeked", seeked, { once: true });
+      this.video.addEventListener("seeked", seeked);
       this.video.addEventListener("error", failed, { once: true });
+      this.pendingSeekSupersede = supersede;
+      timer = window.setTimeout(() => {
+        if (!this.video.seeking && this.isAtTarget(target)) finish(true);
+        else finish(false, new Error("视频定位超时"));
+      }, SEEK_TIMEOUT_MS);
       try {
         this.video.currentTime = target;
       } catch (error) {
-        finish(error instanceof Error ? error : new Error("视频定位失败"));
+        finish(false, error instanceof Error ? error : new Error("视频定位失败"));
+        return;
       }
+      queueMicrotask(() => {
+        if (!this.video.seeking && this.isAtTarget(target)) finish(true);
+      });
     });
   }
 
@@ -78,8 +111,38 @@ export class HtmlVideoAdapter implements MediaPlayerAdapter {
   }
 
   dispose(): void {
+    this.supersedePendingSeek();
+    this.invalidatePlayback();
     this.video.pause();
     this.video.removeAttribute("src");
     this.video.load();
   }
+
+  private clampTarget(seconds: number): number {
+    const target = Math.max(0, seconds);
+    const duration = this.video.duration;
+    return Number.isFinite(duration) && duration >= 0 ? Math.min(target, duration) : target;
+  }
+
+  private isAtTarget(target: number): boolean {
+    return Math.abs(this.video.currentTime - target) <= SEEK_TOLERANCE_SECONDS;
+  }
+
+  private invalidatePlayback(): void {
+    this.playbackSequence += 1;
+  }
+
+  private supersedePendingSeek(): void {
+    const supersede = this.pendingSeekSupersede;
+    this.pendingSeekSupersede = null;
+    supersede?.();
+  }
+}
+
+function isExpectedPlayInterruption(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: unknown; message?: unknown };
+  if (candidate.name === "AbortError") return true;
+  return typeof candidate.message === "string"
+    && /play\(\).*interrupted.*pause\(\)/i.test(candidate.message);
 }
