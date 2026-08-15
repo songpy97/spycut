@@ -1,5 +1,7 @@
 # VFR Export Timestamp Repair Implementation Plan
 
+> Superseded by `2026-08-15-vfr-export-timebase.md` after a real Windows source exposed a pre-selection timebase regression.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Preserve edit-plan wall-clock duration when exporting VFR MP4 sources to CFR output.

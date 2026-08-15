@@ -608,8 +608,6 @@ mod ffmpeg_integration_tests {
         let ffprobe = locate_media_tool(MediaTool::Ffprobe).expect("ffprobe is required");
         let directory = tempdir().unwrap();
         let source = directory.path().join("vfr-wall-clock-source.mp4");
-        let output = directory.path().join("vfr-wall-clock-output.mp4");
-        let filter = directory.path().join("vfr-wall-clock.filter.txt");
         #[cfg(target_os = "macos")]
         let source_encoder = "h264_videotoolbox";
         #[cfg(target_os = "windows")]
@@ -646,6 +644,8 @@ mod ffmpeg_integration_tests {
             "vfr",
             "-c:a",
             "aac",
+            "-video_track_timescale",
+            "6000",
         ]);
         if source_encoder == "libx264" {
             fixture.args(["-preset", "ultrafast"]);
@@ -665,42 +665,84 @@ mod ffmpeg_integration_tests {
 
         let media = probe_media(&ffprobe, &source).await.unwrap();
         assert!(media.variable_frame_rate);
-        let plan =
-            ExportPlan::build(&media, &[DeleteInterval::new(1, 0, 5_000_000).unwrap()]).unwrap();
-        std::fs::write(&filter, build_filter_script(&plan).unwrap()).unwrap();
-        let config = ExportJobConfig {
-            job_id: "vfr-wall-clock".into(),
-            ffmpeg: ffmpeg.clone(),
-            ffprobe: ffprobe.clone(),
-            source,
-            destination: output.clone(),
-            partial: output.clone(),
-            filter_script: filter,
-            media: media.clone(),
-            plan: plan.clone(),
-            encoder: select_encoder(&ffmpeg, VideoCodec::H264).await.unwrap(),
-            recovery_store: None,
-        };
-        let exported = tokio::time::timeout(
-            std::time::Duration::from_secs(60),
-            build_command(&config).output(),
+        let video_time_base = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            Command::new(&ffprobe)
+                .args([
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=time_base",
+                    "-of",
+                    "default=nw=1:nk=1",
+                ])
+                .arg(&source)
+                .output(),
         )
         .await
-        .expect("VFR export timed out")
+        .expect("VFR fixture timebase probe timed out")
         .unwrap();
-        assert!(
-            exported.status.success(),
-            "VFR export failed: {}",
-            String::from_utf8_lossy(&exported.stderr)
+        assert!(video_time_base.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&video_time_base.stdout).trim(),
+            "1/6000"
         );
+        let cases = [
+            (
+                "initial-delete",
+                vec![DeleteInterval::new(1, 0, 5_000_000).unwrap()],
+            ),
+            (
+                "multiple-deletes",
+                vec![
+                    DeleteInterval::new(1, 1_000_000, 2_500_000).unwrap(),
+                    DeleteInterval::new(2, 6_000_000, 8_500_000).unwrap(),
+                ],
+            ),
+        ];
+        let encoder = select_encoder(&ffmpeg, VideoCodec::H264).await.unwrap();
 
-        let summary = validate_export(&ffmpeg, &ffprobe, &output, &media, &plan)
+        for (label, delete_intervals) in cases {
+            let output = directory.path().join(format!("vfr-{label}-output.mp4"));
+            let filter = directory.path().join(format!("vfr-{label}.filter.txt"));
+            let plan = ExportPlan::build(&media, &delete_intervals).unwrap();
+            std::fs::write(&filter, build_filter_script(&plan).unwrap()).unwrap();
+            let config = ExportJobConfig {
+                job_id: format!("vfr-{label}"),
+                ffmpeg: ffmpeg.clone(),
+                ffprobe: ffprobe.clone(),
+                source: source.clone(),
+                destination: output.clone(),
+                partial: output.clone(),
+                filter_script: filter,
+                media: media.clone(),
+                plan: plan.clone(),
+                encoder: encoder.clone(),
+                recovery_store: None,
+            };
+            let exported = tokio::time::timeout(
+                std::time::Duration::from_secs(60),
+                build_command(&config).output(),
+            )
             .await
+            .expect("VFR export timed out")
             .unwrap();
-        assert!(summary.duration_delta_us <= 100_000);
-        assert!(
-            summary.av_duration_delta_us.unwrap() <= plan.output_frame_rate.frame_duration_us()
-        );
+            assert!(
+                exported.status.success(),
+                "VFR {label} export failed: {}",
+                String::from_utf8_lossy(&exported.stderr)
+            );
+
+            let summary = validate_export(&ffmpeg, &ffprobe, &output, &media, &plan)
+                .await
+                .unwrap();
+            assert!(summary.duration_delta_us <= 100_000);
+            assert!(
+                summary.av_duration_delta_us.unwrap() <= plan.output_frame_rate.frame_duration_us()
+            );
+        }
     }
 
     #[tokio::test]

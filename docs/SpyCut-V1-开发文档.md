@@ -574,9 +574,9 @@ H.265 边界智能渲染需要确保原视频和新编码 GOP 的以下参数兼
 
 ```text
 [0:v:0]
-setpts=PTS-STARTPTS,
 select='gte(t,0)*lt(t,125.400)+gte(t,140.200)*lt(t,300.000)',
-setpts='PTS-(gte(PTS*TB,140.200)*14.800)/TB',
+settb=AVTB,
+setpts='(T-STARTT+0-(gte(T-STARTT+0,140.200)*14.800))/TB',
 fps=30:start_time=0
 [vout]
 ```
@@ -585,13 +585,14 @@ fps=30:start_time=0
 
 ```text
 [0:a:0]
-asetpts=PTS-STARTPTS,
+asetnsamples=n=32:p=0,
 aselect='gte(t,0)*lt(t,125.400)+gte(t,140.200)*lt(t,300.000)',
+asettb=AVTB,
 asetpts=N/SR/TB
 [aout]
 ```
 
-视频先保留原始墙钟 PTS，再扣除当前帧之前已经结束的删除区间总时长，最后由 `fps` 过滤器统一为 CFR。这样 VFR 源的局部帧密度不会压缩或拉长成片。音频采样率固定，继续按保留样本数生成连续时间戳。
+音视频先在解码器提供的原始 `t` 时间轴上筛选，避免筛选前的裸 `PTS-STARTPTS` 改变非标准轨道 timebase 的语义。视频筛选后由 `settb=AVTB` 在保持实际秒值的前提下重标 timebase，再以 `T/STARTT` 扣除当前帧之前已经结束的删除区间总时长，最后由 `fps` 过滤器统一为 CFR。音频筛选后同样重标为 `AVTB`，采样率固定，因此继续按保留样本数生成连续时间戳。
 
 实际代码从整数微秒生成过滤脚本文件，不将表达式和用户路径拼入 shell 字符串。
 
