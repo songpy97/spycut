@@ -603,6 +603,108 @@ mod ffmpeg_integration_tests {
 
     #[tokio::test]
     #[ignore = "requires the local FFmpeg toolchain"]
+    async fn exact_export_preserves_vfr_wall_clock_duration() {
+        let ffmpeg = locate_media_tool(MediaTool::Ffmpeg).expect("FFmpeg is required");
+        let ffprobe = locate_media_tool(MediaTool::Ffprobe).expect("ffprobe is required");
+        let directory = tempdir().unwrap();
+        let source = directory.path().join("vfr-wall-clock-source.mp4");
+        let output = directory.path().join("vfr-wall-clock-output.mp4");
+        let filter = directory.path().join("vfr-wall-clock.filter.txt");
+        #[cfg(target_os = "macos")]
+        let source_encoder = "h264_videotoolbox";
+        #[cfg(target_os = "windows")]
+        let source_encoder = "h264_mf";
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        let source_encoder = "libx264";
+
+        let mut fixture = Command::new(&ffmpeg);
+        fixture.args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x180:rate=30:duration=10",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=48000:duration=10",
+            "-filter_complex",
+            "[0:v:0]select='lt(t,5)+gte(t,5)*not(mod(n,3))'[vfr]",
+            "-map",
+            "[vfr]",
+            "-map",
+            "1:a:0",
+            "-c:v",
+            source_encoder,
+            "-pix_fmt",
+            "yuv420p",
+            "-fps_mode",
+            "vfr",
+            "-c:a",
+            "aac",
+        ]);
+        if source_encoder == "libx264" {
+            fixture.args(["-preset", "ultrafast"]);
+        }
+        let generated = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            fixture.arg(&source).output(),
+        )
+        .await
+        .expect("VFR fixture generation timed out")
+        .unwrap();
+        assert!(
+            generated.status.success(),
+            "VFR fixture generation failed: {}",
+            String::from_utf8_lossy(&generated.stderr)
+        );
+
+        let media = probe_media(&ffprobe, &source).await.unwrap();
+        assert!(media.variable_frame_rate);
+        let plan =
+            ExportPlan::build(&media, &[DeleteInterval::new(1, 0, 5_000_000).unwrap()]).unwrap();
+        std::fs::write(&filter, build_filter_script(&plan).unwrap()).unwrap();
+        let config = ExportJobConfig {
+            job_id: "vfr-wall-clock".into(),
+            ffmpeg: ffmpeg.clone(),
+            ffprobe: ffprobe.clone(),
+            source,
+            destination: output.clone(),
+            partial: output.clone(),
+            filter_script: filter,
+            media: media.clone(),
+            plan: plan.clone(),
+            encoder: select_encoder(&ffmpeg, VideoCodec::H264).await.unwrap(),
+            recovery_store: None,
+        };
+        let exported = tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            build_command(&config).output(),
+        )
+        .await
+        .expect("VFR export timed out")
+        .unwrap();
+        assert!(
+            exported.status.success(),
+            "VFR export failed: {}",
+            String::from_utf8_lossy(&exported.stderr)
+        );
+
+        let summary = validate_export(&ffmpeg, &ffprobe, &output, &media, &plan)
+            .await
+            .unwrap();
+        assert!(summary.duration_delta_us <= 100_000);
+        assert!(
+            summary.av_duration_delta_us.unwrap() <= plan.output_frame_rate.frame_duration_us()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the local FFmpeg toolchain"]
     async fn exact_export_keeps_the_expected_source_frames_in_order() {
         let ffmpeg = locate_media_tool(MediaTool::Ffmpeg).expect("FFmpeg is required");
         let ffprobe = locate_media_tool(MediaTool::Ffprobe).expect("ffprobe is required");

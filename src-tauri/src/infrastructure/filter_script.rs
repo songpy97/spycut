@@ -21,18 +21,38 @@ pub fn build_filter_script(plan: &ExportPlan) -> Result<String, FilterScriptErro
         "{}/{}",
         plan.output_frame_rate.num, plan.output_frame_rate.den
     );
+    let video_pts = compacted_video_pts(plan);
 
     let mut script = format!(
-        "[0:v:0]split=2[vkeep][vscan];[vkeep]select='{expression}',setpts=N/({frame_rate}*TB),format=yuv420p[vout];[vscan]fps=1/2,setpts=PTS-STARTPTS[vprogress]"
+        "[0:v:0]split=2[vkeep][vscan];[vkeep]setpts=PTS-STARTPTS,select='{expression}',setpts='{video_pts}',fps={frame_rate}:start_time=0,format=yuv420p[vout];[vscan]fps=1/2,setpts=PTS-STARTPTS[vprogress]"
     );
     if plan.has_audio {
         // Splitting audio frames into small packets before aselect keeps boundary error below
         // one millisecond at common 44.1/48 kHz sample rates without creating huge graphs.
         script.push_str(&format!(
-            ";[0:a:0]asetnsamples=n=32:p=0,aselect='{expression}',asetpts=N/SR/TB[aout]"
+            ";[0:a:0]asetpts=PTS-STARTPTS,asetnsamples=n=32:p=0,aselect='{expression}',asetpts=N/SR/TB[aout]"
         ));
     }
     Ok(script)
+}
+
+fn compacted_video_pts(plan: &ExportPlan) -> String {
+    if plan.delete_intervals.is_empty() {
+        return "PTS".into();
+    }
+    let deleted_before_pts = plan
+        .delete_intervals
+        .iter()
+        .map(|interval| {
+            format!(
+                "gte(PTS*TB,{:.6})*{:.6}",
+                interval.end_us as f64 / 1_000_000.0,
+                interval.duration_us() as f64 / 1_000_000.0
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("+");
+    format!("PTS-({deleted_before_pts})/TB")
 }
 
 fn keep_expression(range: &TimeRange) -> String {
@@ -86,11 +106,34 @@ mod tests {
 
         assert!(script.contains("gte(t,0.000000)*lt(t,2.000000)"));
         assert!(script.contains("gte(t,4.500000)*lt(t,10.000000)"));
-        assert!(script.contains("setpts=N/(30/1*TB)"));
+        assert!(script.contains("[vkeep]setpts=PTS-STARTPTS,select="));
+        assert!(
+            script
+                .contains("setpts='PTS-(gte(PTS*TB,4.500000)*2.500000)/TB',fps=30/1:start_time=0")
+        );
+        assert!(!script.contains("setpts=N/("));
         assert!(script.contains("split=2[vkeep][vscan]"));
         assert!(script.contains("fps=1/2"));
+        assert!(script.contains("[0:a:0]asetpts=PTS-STARTPTS,asetnsamples=n=32:p=0"));
         assert!(script.contains("asetnsamples=n=32:p=0"));
         assert!(script.contains("asetpts=N/SR/TB"));
+    }
+
+    #[test]
+    fn compacts_video_pts_by_all_completed_delete_intervals() {
+        let plan = ExportPlan::build(
+            &media(false),
+            &[
+                DeleteInterval::new(1, 2_000_000, 4_500_000).unwrap(),
+                DeleteInterval::new(2, 6_000_000, 7_000_000).unwrap(),
+            ],
+        )
+        .unwrap();
+        let script = build_filter_script(&plan).unwrap();
+
+        assert!(script.contains(
+            "setpts='PTS-(gte(PTS*TB,4.500000)*2.500000+gte(PTS*TB,7.000000)*1.000000)/TB'"
+        ));
     }
 
     #[test]
