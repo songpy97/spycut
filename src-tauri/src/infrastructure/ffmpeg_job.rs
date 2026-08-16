@@ -603,6 +603,164 @@ mod ffmpeg_integration_tests {
 
     #[tokio::test]
     #[ignore = "requires the local FFmpeg toolchain"]
+    async fn exact_export_compacts_a_trailing_delete_and_concatenates_audio() {
+        let ffmpeg = locate_media_tool(MediaTool::Ffmpeg).expect("FFmpeg is required");
+        let ffprobe = locate_media_tool(MediaTool::Ffprobe).expect("ffprobe is required");
+        let directory = tempdir().unwrap();
+        let source = directory.path().join("trailing-delete-source.mp4");
+        let output = directory.path().join("trailing-delete-output.mp4");
+        let filter = directory.path().join("trailing-delete.filter.txt");
+        #[cfg(target_os = "macos")]
+        let source_encoder = "h264_videotoolbox";
+        #[cfg(target_os = "windows")]
+        let source_encoder = "h264_mf";
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        let source_encoder = "libx264";
+
+        let mut fixture = Command::new(&ffmpeg);
+        fixture.args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x180:rate=30:duration=5.9",
+            "-f",
+            "lavfi",
+            "-i",
+            "aevalsrc=0.8*sin(2*PI*880*t)*between(t\\,2\\,4):s=48000:d=6",
+            "-c:v",
+            source_encoder,
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+        ]);
+        if source_encoder == "libx264" {
+            fixture.args(["-preset", "ultrafast"]);
+        }
+        let generated = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            fixture.arg(&source).output(),
+        )
+        .await
+        .expect("trailing-delete fixture generation timed out")
+        .unwrap();
+        assert!(
+            generated.status.success(),
+            "trailing-delete fixture generation failed: {}",
+            String::from_utf8_lossy(&generated.stderr)
+        );
+
+        let media = probe_media(&ffprobe, &source).await.unwrap();
+        let video_duration = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            Command::new(&ffprobe)
+                .args([
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=duration",
+                    "-of",
+                    "default=nw=1:nk=1",
+                ])
+                .arg(&source)
+                .output(),
+        )
+        .await
+        .expect("video duration probe timed out")
+        .unwrap();
+        assert!(video_duration.status.success());
+        let video_duration_us = (String::from_utf8_lossy(&video_duration.stdout)
+            .trim()
+            .parse::<f64>()
+            .unwrap()
+            * 1_000_000.0)
+            .round() as i64;
+        assert!(video_duration_us < media.duration_us);
+
+        let plan = ExportPlan::build(
+            &media,
+            &[
+                DeleteInterval::new(1, 2_000_000, 4_000_000).unwrap(),
+                DeleteInterval::new(2, 5_000_000, media.duration_us).unwrap(),
+            ],
+        )
+        .unwrap();
+        assert!(video_duration_us > 5_000_000);
+        assert!(video_duration_us < plan.source_duration_us);
+        std::fs::write(&filter, build_filter_script(&plan).unwrap()).unwrap();
+
+        let config = ExportJobConfig {
+            job_id: "trailing-delete".into(),
+            ffmpeg: ffmpeg.clone(),
+            ffprobe: ffprobe.clone(),
+            source,
+            destination: output.clone(),
+            partial: output.clone(),
+            filter_script: filter,
+            media: media.clone(),
+            plan: plan.clone(),
+            encoder: select_encoder(&ffmpeg, VideoCodec::H264).await.unwrap(),
+            recovery_store: None,
+        };
+        let exported = tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            build_command(&config).output(),
+        )
+        .await
+        .expect("trailing-delete export timed out")
+        .unwrap();
+        assert!(
+            exported.status.success(),
+            "trailing-delete export failed: {}",
+            String::from_utf8_lossy(&exported.stderr)
+        );
+
+        let summary = validate_export(&ffmpeg, &ffprobe, &output, &media, &plan)
+            .await
+            .unwrap();
+        assert!(summary.duration_delta_us <= 75_000);
+        assert!(
+            summary.av_duration_delta_us.unwrap() <= plan.output_frame_rate.frame_duration_us()
+        );
+
+        // The source contains a tone only in the deleted 2..4 second range.
+        // The second half of the output must therefore remain near-silent.
+        let decoded_audio = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            Command::new(&ffmpeg)
+                .args(["-hide_banner", "-loglevel", "error", "-ss", "2.2", "-i"])
+                .arg(&output)
+                .args([
+                    "-t", "0.5", "-map", "0:a:0", "-ac", "1", "-ar", "48000", "-f", "s16le",
+                    "pipe:1",
+                ])
+                .output(),
+        )
+        .await
+        .expect("exported audio decode timed out")
+        .unwrap();
+        assert!(decoded_audio.status.success());
+        let max_amplitude = decoded_audio
+            .stdout
+            .chunks_exact(2)
+            .map(|sample| i16::from_le_bytes([sample[0], sample[1]]).unsigned_abs())
+            .max()
+            .unwrap_or_default();
+        assert!(
+            max_amplitude < 1_000,
+            "deleted source tone leaked into the output (max amplitude {max_amplitude})"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the local FFmpeg toolchain"]
     async fn exact_export_preserves_vfr_wall_clock_duration() {
         let ffmpeg = locate_media_tool(MediaTool::Ffmpeg).expect("FFmpeg is required");
         let ffprobe = locate_media_tool(MediaTool::Ffprobe).expect("ffprobe is required");

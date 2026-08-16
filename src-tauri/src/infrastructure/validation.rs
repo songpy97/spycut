@@ -26,8 +26,15 @@ pub enum ValidationError {
     Probe(#[from] ProbeError),
     #[error("the output codec does not match the source codec")]
     CodecMismatch,
-    #[error("the output duration differs from the edit plan by {delta_us} microseconds")]
-    DurationMismatch { delta_us: Micros },
+    #[error(
+        "the output duration is {actual_us} microseconds, the edit plan is {expected_us} microseconds (actual minus expected: {signed_delta_us}; absolute difference: {delta_us})"
+    )]
+    DurationMismatch {
+        actual_us: Micros,
+        expected_us: Micros,
+        signed_delta_us: Micros,
+        delta_us: Micros,
+    },
     #[error("cannot inspect exported stream structure: {0}")]
     StructureProbe(String),
     #[error("the exported stream layout is invalid: {0}")]
@@ -55,10 +62,16 @@ pub async fn validate_export(
     if output_media.video_codec != source_media.video_codec {
         return Err(ValidationError::CodecMismatch);
     }
-    let delta = (output_media.duration_us - plan.kept_duration_us).abs();
+    let signed_delta = output_media.duration_us - plan.kept_duration_us;
+    let delta = signed_delta.abs();
     let tolerance = (plan.output_frame_rate.frame_duration_us() * 2).max(75_000);
     if delta > tolerance {
-        return Err(ValidationError::DurationMismatch { delta_us: delta });
+        return Err(ValidationError::DurationMismatch {
+            actual_us: output_media.duration_us,
+            expected_us: plan.kept_duration_us,
+            signed_delta_us: signed_delta,
+            delta_us: delta,
+        });
     }
 
     let structure = probe_output_structure(
@@ -334,6 +347,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(validation_checkpoints(&plan), vec![0.0, 1.95, 2.05, 7.9]);
+    }
+
+    #[test]
+    fn duration_mismatch_reports_actual_expected_and_signed_delta() {
+        let error = ValidationError::DurationMismatch {
+            actual_us: 6_154_774_395,
+            expected_us: 6_130_990_375,
+            signed_delta_us: 23_784_020,
+            delta_us: 23_784_020,
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "the output duration is 6154774395 microseconds, the edit plan is 6130990375 microseconds (actual minus expected: 23784020; absolute difference: 23784020)"
+        );
     }
 
     fn structure_document(json: &str) -> OutputStructureDocument {

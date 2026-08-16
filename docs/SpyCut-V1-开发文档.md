@@ -576,7 +576,7 @@ H.265 边界智能渲染需要确保原视频和新编码 GOP 的以下参数兼
 [0:v:0]
 select='gte(t,0)*lt(t,125.400)+gte(t,140.200)*lt(t,300.000)',
 settb=AVTB,
-setpts='(T-STARTT+0-(gte(T-STARTT+0,140.200)*14.800))/TB',
+setpts='(T-STARTT+0-min(max(T-STARTT+0-125.400,0),14.800))/TB',
 fps=30:start_time=0
 [vout]
 ```
@@ -586,13 +586,15 @@ fps=30:start_time=0
 ```text
 [0:a:0]
 asetnsamples=n=32:p=0,
-aselect='gte(t,0)*lt(t,125.400)+gte(t,140.200)*lt(t,300.000)',
-asettb=AVTB,
-asetpts=N/SR/TB
+asegment=timestamps=125.400|140.200[apart0][apart1][apart2];
+[apart0]asettb=AVTB,asetpts=N/SR/TB[akeep0];
+[apart1]anullsink;
+[apart2]asettb=AVTB,asetpts=N/SR/TB[akeep1];
+[akeep0][akeep1]concat=n=2:v=0:a=1,asettb=AVTB,asetpts=N/SR/TB
 [aout]
 ```
 
-音视频先在解码器提供的原始 `t` 时间轴上筛选，避免筛选前的裸 `PTS-STARTPTS` 改变非标准轨道 timebase 的语义。视频筛选后由 `settb=AVTB` 在保持实际秒值的前提下重标 timebase，再以 `T/STARTT` 扣除当前帧之前已经结束的删除区间总时长，最后由 `fps` 过滤器统一为 CFR。音频筛选后同样重标为 `AVTB`，采样率固定，因此继续按保留样本数生成连续时间戳。
+音视频先在解码器提供的原始 `t` 时间轴上筛选，避免筛选前的裸 `PTS-STARTPTS` 改变非标准轨道 timebase 的语义。视频筛选后由 `settb=AVTB` 在保持实际秒值的前提下重标 timebase，再以 `T/STARTT` 扣除当前源时间与删除区间的累计重叠时长，最后由 `fps` 过滤器统一为 CFR。累计重叠表达式也会处理 EOF 落入尾删区间的情况，避免 `fps` 按未压缩 EOF 补回最后一帧。音频由 `asegment` 在原始时间轴上一次性按删除边界顺序分段，删除段接入 `anullsink`，保留段从零重排后由 `concat` 串接，最后按保留样本数生成连续时间戳；这同时绕过 FFmpeg 8.0.1 中失效的 `aselect`，并避免长音轨的处理量随区间数成倍增加。
 
 实际代码从整数微秒生成过滤脚本文件，不将表达式和用户路径拼入 shell 字符串。
 

@@ -27,11 +27,7 @@ pub fn build_filter_script(plan: &ExportPlan) -> Result<String, FilterScriptErro
         "[0:v:0]split=2[vkeep][vscan];[vkeep]select='{expression}',settb=AVTB,setpts='{video_pts}',fps={frame_rate}:start_time=0,format=yuv420p[vout];[vscan]fps=1/2,setpts=PTS-STARTPTS[vprogress]"
     );
     if plan.has_audio {
-        // Splitting audio frames into small packets before aselect keeps boundary error below
-        // one millisecond at common 44.1/48 kHz sample rates without creating huge graphs.
-        script.push_str(&format!(
-            ";[0:a:0]asetnsamples=n=32:p=0,aselect='{expression}',asettb=AVTB,asetpts=N/SR/TB[aout]"
-        ));
+        script.push_str(&audio_filter_script(plan));
     }
     Ok(script)
 }
@@ -47,14 +43,72 @@ fn compacted_video_pts(plan: &ExportPlan) -> String {
         .iter()
         .map(|interval| {
             format!(
-                "gte({source_time},{:.6})*{:.6}",
-                interval.end_us as f64 / 1_000_000.0,
+                "min(max({source_time}-{:.6},0),{:.6})",
+                interval.start_us as f64 / 1_000_000.0,
                 interval.duration_us() as f64 / 1_000_000.0
             )
         })
         .collect::<Vec<_>>()
         .join("+");
     format!("({source_time}-({deleted_before_pts}))/TB")
+}
+
+fn audio_filter_script(plan: &ExportPlan) -> String {
+    let mut boundaries = plan
+        .delete_intervals
+        .iter()
+        .flat_map(|interval| [interval.start_us, interval.end_us])
+        .filter(|timestamp| *timestamp > 0 && *timestamp < plan.source_duration_us)
+        .collect::<Vec<_>>();
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    if boundaries.is_empty() {
+        return ";[0:a:0]asetnsamples=n=32:p=0,asettb=AVTB,asetpts=N/SR/TB[aout]".into();
+    }
+
+    let segment_count = boundaries.len() + 1;
+    let segment_outputs = (0..segment_count)
+        .map(|index| format!("[apart{index}]"))
+        .collect::<String>();
+    let timestamps = boundaries
+        .iter()
+        .map(|timestamp| format!("{:.6}", *timestamp as f64 / 1_000_000.0))
+        .collect::<Vec<_>>()
+        .join("|");
+    let mut script =
+        format!(";[0:a:0]asetnsamples=n=32:p=0,asegment=timestamps={timestamps}{segment_outputs}");
+
+    let mut points = Vec::with_capacity(segment_count + 1);
+    points.push(0);
+    points.extend(boundaries);
+    points.push(plan.source_duration_us);
+    let mut keep_count = 0;
+    for (index, segment) in points.windows(2).enumerate() {
+        let is_kept = plan
+            .keep_intervals
+            .iter()
+            .any(|range| range.start_us == segment[0] && range.end_us == segment[1]);
+        if is_kept {
+            script.push_str(&format!(
+                ";[apart{index}]asettb=AVTB,asetpts=N/SR/TB[akeep{keep_count}]"
+            ));
+            keep_count += 1;
+        } else {
+            script.push_str(&format!(";[apart{index}]anullsink"));
+        }
+    }
+
+    if keep_count == 1 {
+        script.push_str(";[akeep0]anull[aout]");
+        return script;
+    }
+    let keep_inputs = (0..keep_count)
+        .map(|index| format!("[akeep{index}]"))
+        .collect::<String>();
+    script.push_str(&format!(
+        ";{keep_inputs}concat=n={keep_count}:v=0:a=1,asettb=AVTB,asetpts=N/SR/TB[aout]"
+    ));
+    script
 }
 
 fn keep_expression(range: &TimeRange) -> String {
@@ -111,19 +165,27 @@ mod tests {
         assert!(script.contains("[vkeep]select="));
         assert!(
             script
-                .contains(",settb=AVTB,setpts='(T-STARTT+0.000000-(gte(T-STARTT+0.000000,4.500000)*2.500000))/TB',fps=30/1:start_time=0")
+                .contains(",settb=AVTB,setpts='(T-STARTT+0.000000-(min(max(T-STARTT+0.000000-2.000000,0),2.500000)))/TB',fps=30/1:start_time=0")
         );
         assert!(!script.contains("[vkeep]setpts=PTS-STARTPTS,select="));
         assert!(!script.contains("setpts=N/("));
         assert!(script.contains("split=2[vkeep][vscan]"));
         assert!(script.contains("fps=1/2"));
         assert!(!script.contains("[0:a:0]asetpts=PTS-STARTPTS"));
-        assert!(script.contains("[0:a:0]asetnsamples=n=32:p=0,aselect=",));
-        assert!(script.contains(",asettb=AVTB,asetpts=N/SR/TB[aout]"));
+        assert!(!script.contains("aselect="));
+        assert!(script.contains(
+            "[0:a:0]asetnsamples=n=32:p=0,asegment=timestamps=2.000000|4.500000[apart0][apart1][apart2]"
+        ));
+        assert!(script.contains("[apart0]asettb=AVTB,asetpts=N/SR/TB[akeep0]"));
+        assert!(script.contains("[apart1]anullsink"));
+        assert!(script.contains("[apart2]asettb=AVTB,asetpts=N/SR/TB[akeep1]"));
+        assert!(
+            script.contains("[akeep0][akeep1]concat=n=2:v=0:a=1,asettb=AVTB,asetpts=N/SR/TB[aout]")
+        );
     }
 
     #[test]
-    fn compacts_video_pts_by_all_completed_delete_intervals() {
+    fn compacts_video_pts_by_elapsed_delete_overlap() {
         let plan = ExportPlan::build(
             &media(false),
             &[
@@ -135,21 +197,39 @@ mod tests {
         let script = build_filter_script(&plan).unwrap();
 
         assert!(script.contains(
-            "setpts='(T-STARTT+0.000000-(gte(T-STARTT+0.000000,4.500000)*2.500000+gte(T-STARTT+0.000000,7.000000)*1.000000))/TB'"
+            "setpts='(T-STARTT+0.000000-(min(max(T-STARTT+0.000000-2.000000,0),2.500000)+min(max(T-STARTT+0.000000-6.000000,0),1.000000)))/TB'"
         ));
+    }
+
+    #[test]
+    fn trailing_delete_compacts_an_eof_before_the_container_end() {
+        let plan = ExportPlan::build(
+            &media(false),
+            &[DeleteInterval::new(1, 8_000_000, 10_000_000).unwrap()],
+        )
+        .unwrap();
+        let script = build_filter_script(&plan).unwrap();
+
+        assert!(script.contains(
+            "setpts='(T-STARTT+0.000000-(min(max(T-STARTT+0.000000-8.000000,0),2.000000)))/TB'"
+        ));
+        assert!(!script.contains("gte(T-STARTT+0.000000,10.000000)"));
     }
 
     #[test]
     fn initial_delete_still_rebases_the_first_kept_frame_to_zero() {
         let plan = ExportPlan::build(
-            &media(false),
+            &media(true),
             &[DeleteInterval::new(1, 0, 5_000_000).unwrap()],
         )
         .unwrap();
         let script = build_filter_script(&plan).unwrap();
 
         assert!(script.contains(
-            "setpts='(T-STARTT+5.000000-(gte(T-STARTT+5.000000,5.000000)*5.000000))/TB'"
+            "setpts='(T-STARTT+5.000000-(min(max(T-STARTT+5.000000-0.000000,0),5.000000)))/TB'"
+        ));
+        assert!(script.contains(
+            "asegment=timestamps=5.000000[apart0][apart1];[apart0]anullsink;[apart1]asettb=AVTB,asetpts=N/SR/TB[akeep0];[akeep0]anull[aout]"
         ));
     }
 
