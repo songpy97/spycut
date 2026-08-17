@@ -603,6 +603,114 @@ mod ffmpeg_integration_tests {
 
     #[tokio::test]
     #[ignore = "requires the local FFmpeg toolchain"]
+    async fn exact_export_handles_many_audio_delete_intervals() {
+        let ffmpeg = locate_media_tool(MediaTool::Ffmpeg).expect("FFmpeg is required");
+        let ffprobe = locate_media_tool(MediaTool::Ffprobe).expect("ffprobe is required");
+        let directory = tempdir().unwrap();
+        let source = directory.path().join("many-audio-segments-source.mp4");
+        let output = directory.path().join("many-audio-segments-output.mp4");
+        let filter = directory.path().join("many-audio-segments.filter.txt");
+        #[cfg(target_os = "macos")]
+        let source_encoder = "hevc_videotoolbox";
+        #[cfg(target_os = "windows")]
+        let source_encoder = "hevc_mf";
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        let source_encoder = "libx265";
+
+        let mut fixture = Command::new(&ffmpeg);
+        fixture.args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x180:rate=30:duration=8",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:sample_rate=48000:duration=8",
+            "-c:v",
+            source_encoder,
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+        ]);
+        if source_encoder.starts_with("libx") {
+            fixture.args(["-preset", "ultrafast"]);
+        }
+        let generated = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            fixture.arg(&source).output(),
+        )
+        .await
+        .expect("many-segment fixture generation timed out")
+        .unwrap();
+        assert!(
+            generated.status.success(),
+            "many-segment fixture generation failed: {}",
+            String::from_utf8_lossy(&generated.stderr)
+        );
+
+        let media = probe_media(&ffprobe, &source).await.unwrap();
+        let period_us = media.duration_us / 40;
+        let delete_intervals = (0..40)
+            .map(|index| {
+                let period_start = index as i64 * period_us;
+                let end_us = if index == 39 {
+                    media.duration_us
+                } else {
+                    (index as i64 + 1) * period_us
+                };
+                DeleteInterval::new(index + 1, period_start + period_us / 2, end_us).unwrap()
+            })
+            .collect::<Vec<_>>();
+        let plan = ExportPlan::build(&media, &delete_intervals).unwrap();
+        assert_eq!(plan.delete_intervals.len(), 40);
+        assert_eq!(plan.keep_intervals.len(), 40);
+        std::fs::write(&filter, build_filter_script(&plan).unwrap()).unwrap();
+
+        let config = ExportJobConfig {
+            job_id: "many-audio-segments".into(),
+            ffmpeg: ffmpeg.clone(),
+            ffprobe: ffprobe.clone(),
+            source,
+            destination: output.clone(),
+            partial: output.clone(),
+            filter_script: filter,
+            media: media.clone(),
+            plan: plan.clone(),
+            encoder: select_encoder(&ffmpeg, VideoCodec::Hevc).await.unwrap(),
+            recovery_store: None,
+        };
+        let exported = tokio::time::timeout(
+            std::time::Duration::from_secs(120),
+            build_command(&config).output(),
+        )
+        .await
+        .expect("many-segment export timed out")
+        .unwrap();
+        assert!(
+            exported.status.success(),
+            "many-segment export failed: {}",
+            String::from_utf8_lossy(&exported.stderr)
+        );
+
+        let summary = validate_export(&ffmpeg, &ffprobe, &output, &media, &plan)
+            .await
+            .unwrap();
+        assert!(summary.duration_delta_us <= 100_000);
+        assert!(
+            summary.av_duration_delta_us.unwrap() <= plan.output_frame_rate.frame_duration_us()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the local FFmpeg toolchain"]
     async fn exact_export_compacts_a_trailing_delete_and_concatenates_audio() {
         let ffmpeg = locate_media_tool(MediaTool::Ffmpeg).expect("FFmpeg is required");
         let ffprobe = locate_media_tool(MediaTool::Ffprobe).expect("ffprobe is required");

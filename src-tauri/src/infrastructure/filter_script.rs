@@ -67,16 +67,14 @@ fn audio_filter_script(plan: &ExportPlan) -> String {
     }
 
     let segment_count = boundaries.len() + 1;
-    let segment_outputs = (0..segment_count)
-        .map(|index| format!("[apart{index}]"))
-        .collect::<String>();
-    let timestamps = boundaries
-        .iter()
-        .map(|timestamp| format!("{:.6}", *timestamp as f64 / 1_000_000.0))
-        .collect::<Vec<_>>()
-        .join("|");
-    let mut script =
-        format!(";[0:a:0]asetnsamples=n=32:p=0,asegment=timestamps={timestamps}{segment_outputs}");
+    let mut script = ";[0:a:0]asetnsamples=n=32:p=0[arem0]".to_string();
+    for (index, timestamp) in boundaries.iter().enumerate() {
+        script.push_str(&format!(
+            ";[arem{index}]asegment=timestamps={:.6}[apart{index}][arem{}]",
+            *timestamp as f64 / 1_000_000.0,
+            index + 1
+        ));
+    }
 
     let mut points = Vec::with_capacity(segment_count + 1);
     points.push(0);
@@ -84,17 +82,22 @@ fn audio_filter_script(plan: &ExportPlan) -> String {
     points.push(plan.source_duration_us);
     let mut keep_count = 0;
     for (index, segment) in points.windows(2).enumerate() {
+        let input = if index + 1 == segment_count {
+            format!("arem{index}")
+        } else {
+            format!("apart{index}")
+        };
         let is_kept = plan
             .keep_intervals
             .iter()
             .any(|range| range.start_us == segment[0] && range.end_us == segment[1]);
         if is_kept {
             script.push_str(&format!(
-                ";[apart{index}]asettb=AVTB,asetpts=N/SR/TB[akeep{keep_count}]"
+                ";[{input}]asettb=AVTB,asetpts=N/SR/TB[akeep{keep_count}]"
             ));
             keep_count += 1;
         } else {
-            script.push_str(&format!(";[apart{index}]anullsink"));
+            script.push_str(&format!(";[{input}]anullsink"));
         }
     }
 
@@ -102,12 +105,15 @@ fn audio_filter_script(plan: &ExportPlan) -> String {
         script.push_str(";[akeep0]anull[aout]");
         return script;
     }
-    let keep_inputs = (0..keep_count)
-        .map(|index| format!("[akeep{index}]"))
-        .collect::<String>();
-    script.push_str(&format!(
-        ";{keep_inputs}concat=n={keep_count}:v=0:a=1,asettb=AVTB,asetpts=N/SR/TB[aout]"
-    ));
+    let mut joined = "akeep0".to_string();
+    for index in 1..keep_count {
+        let output = format!("ajoin{index}");
+        script.push_str(&format!(
+            ";[{joined}][akeep{index}]concat=n=2:v=0:a=1[{output}]"
+        ));
+        joined = output;
+    }
+    script.push_str(&format!(";[{joined}]asettb=AVTB,asetpts=N/SR/TB[aout]"));
     script
 }
 
@@ -173,15 +179,16 @@ mod tests {
         assert!(script.contains("fps=1/2"));
         assert!(!script.contains("[0:a:0]asetpts=PTS-STARTPTS"));
         assert!(!script.contains("aselect="));
+        assert!(script.contains("[0:a:0]asetnsamples=n=32:p=0[arem0]"));
         assert!(script.contains(
-            "[0:a:0]asetnsamples=n=32:p=0,asegment=timestamps=2.000000|4.500000[apart0][apart1][apart2]"
+            "[arem0]asegment=timestamps=2.000000[apart0][arem1];[arem1]asegment=timestamps=4.500000[apart1][arem2]"
         ));
         assert!(script.contains("[apart0]asettb=AVTB,asetpts=N/SR/TB[akeep0]"));
         assert!(script.contains("[apart1]anullsink"));
-        assert!(script.contains("[apart2]asettb=AVTB,asetpts=N/SR/TB[akeep1]"));
-        assert!(
-            script.contains("[akeep0][akeep1]concat=n=2:v=0:a=1,asettb=AVTB,asetpts=N/SR/TB[aout]")
-        );
+        assert!(script.contains("[arem2]asettb=AVTB,asetpts=N/SR/TB[akeep1]"));
+        assert!(script.contains(
+            "[akeep0][akeep1]concat=n=2:v=0:a=1[ajoin1];[ajoin1]asettb=AVTB,asetpts=N/SR/TB[aout]"
+        ));
     }
 
     #[test]
@@ -229,8 +236,29 @@ mod tests {
             "setpts='(T-STARTT+5.000000-(min(max(T-STARTT+5.000000-0.000000,0),5.000000)))/TB'"
         ));
         assert!(script.contains(
-            "asegment=timestamps=5.000000[apart0][apart1];[apart0]anullsink;[apart1]asettb=AVTB,asetpts=N/SR/TB[akeep0];[akeep0]anull[aout]"
+            "[arem0]asegment=timestamps=5.000000[apart0][arem1];[apart0]anullsink;[arem1]asettb=AVTB,asetpts=N/SR/TB[akeep0];[akeep0]anull[aout]"
         ));
+    }
+
+    #[test]
+    fn bounds_audio_filter_fanout_for_many_delete_intervals() {
+        let delete_intervals = (0..40)
+            .map(|index| {
+                DeleteInterval::new(
+                    index + 1,
+                    index as i64 * 250_000 + 125_000,
+                    (index as i64 + 1) * 250_000,
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let plan = ExportPlan::build(&media(true), &delete_intervals).unwrap();
+        let script = build_filter_script(&plan).unwrap();
+
+        assert_eq!(script.matches("asegment=timestamps=").count(), 79);
+        assert!(!script.contains('|'));
+        assert_eq!(script.matches("concat=n=2:v=0:a=1").count(), 39);
+        assert!(!script.contains("concat=n=40"));
     }
 
     #[test]

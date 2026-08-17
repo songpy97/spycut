@@ -585,16 +585,18 @@ fps=30:start_time=0
 
 ```text
 [0:a:0]
-asetnsamples=n=32:p=0,
-asegment=timestamps=125.400|140.200[apart0][apart1][apart2];
+asetnsamples=n=32:p=0[arem0];
+[arem0]asegment=timestamps=125.400[apart0][arem1];
+[arem1]asegment=timestamps=140.200[apart1][arem2];
 [apart0]asettb=AVTB,asetpts=N/SR/TB[akeep0];
 [apart1]anullsink;
-[apart2]asettb=AVTB,asetpts=N/SR/TB[akeep1];
-[akeep0][akeep1]concat=n=2:v=0:a=1,asettb=AVTB,asetpts=N/SR/TB
+[arem2]asettb=AVTB,asetpts=N/SR/TB[akeep1];
+[akeep0][akeep1]concat=n=2:v=0:a=1[ajoin1];
+[ajoin1]asettb=AVTB,asetpts=N/SR/TB
 [aout]
 ```
 
-音视频先在解码器提供的原始 `t` 时间轴上筛选，避免筛选前的裸 `PTS-STARTPTS` 改变非标准轨道 timebase 的语义。视频筛选后由 `settb=AVTB` 在保持实际秒值的前提下重标 timebase，再以 `T/STARTT` 扣除当前源时间与删除区间的累计重叠时长，最后由 `fps` 过滤器统一为 CFR。累计重叠表达式也会处理 EOF 落入尾删区间的情况，避免 `fps` 按未压缩 EOF 补回最后一帧。音频由 `asegment` 在原始时间轴上一次性按删除边界顺序分段，删除段接入 `anullsink`，保留段从零重排后由 `concat` 串接，最后按保留样本数生成连续时间戳；这同时绕过 FFmpeg 8.0.1 中失效的 `aselect`，并避免长音轨的处理量随区间数成倍增加。
+音视频先在解码器提供的原始 `t` 时间轴上筛选，避免筛选前的裸 `PTS-STARTPTS` 改变非标准轨道 timebase 的语义。视频筛选后由 `settb=AVTB` 在保持实际秒值的前提下重标 timebase，再以 `T/STARTT` 扣除当前源时间与删除区间的累计重叠时长，最后由 `fps` 过滤器统一为 CFR。累计重叠表达式也会处理 EOF 落入尾删区间的情况，避免 `fps` 按未压缩 EOF 补回最后一帧。音频由一系列二路 `asegment` 在原始时间轴上按绝对删除边界顺序切分，每个节点只输出当前段与剩余尾部；删除段接入 `anullsink`，保留段从零重排后由二输入 `concat` 链串接，最后按保留样本数生成连续时间戳。固定每个节点的扇入和扇出可以避免大量区间在 Windows FFmpeg 中触发滤镜消费者资源错误，同时继续绕过 FFmpeg 8.0.1 中失效的 `aselect`，也不会让长音轨的解码处理量随区间数成倍增加。
 
 实际代码从整数微秒生成过滤脚本文件，不将表达式和用户路径拼入 shell 字符串。
 
